@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Station Progress</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #ededf0; padding: 20px; margin: 20px;}
+    nav a { margin-right: 15px; font-weight: bold; color: #333; text-decoration: none; }
+    h2 { margin-top: 20px; }
+    h1 { color: #333; }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        background: white;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    select { padding: 8px; font-size: 14px; }
+    table { width: 100%; margin-top: 20px; background: white; border-collapse: collapse; }
+    th, td {
+        padding: 10px;
+        border: 1px solid #ddd;
+        text-align: center;
+    }
+    th { background-color: #333; color: white; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    tr:hover { background-color: #ddd; }
+    
+    .progress-bar { width: 100%; height: 12px; background-color: #ddd; border-radius: 4px; }
+    .progress-fill { height: 100%; background-color: #007bff; border-radius: 4px; transition: width 0.3s ease; }
+    .note-input { width: 50%; padding: 70px; font-size: 18px; border-radius: 4px; border: 1px solid #ccc; }
+    input[type="number"] {
+      font-size: 14px;
+      height: 18px;
+      width: 80px;
+    }
+    input[type="text"] {
+      font-size: 14px;
+      height: 18px;
+      width: 100px;
+    }
+    input, button {
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+    }
+    button {
+        background-color: #333;
+        color: white;
+        cursor: pointer;
+    }
+    button:hover { background-color: #555; }
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1;
+        right: 0;
+        top: 0;
+        width: 30%;
+        height: 100%;
+        background-color: white;
+        padding: 20px;
+        box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+    }
+    .close-btn {
+        float: right;
+        font-size: 24px;
+        cursor: pointer;
+    }
+    .modal form {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .modal form label {
+        font-weight: bold;
+        margin-bottom: 4px;
+        color: #333;
+    }
+    
+    .modal form input {
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 10px;
+        font-size: 16px;
+        background-color: #fff;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .modal form input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+    }
+    
+    
+  </style>
+  <script>
+    function updateTask(taskId) {
+      const inputEl = document.getElementById(`task-completed-${taskId}`);
+      const newCompleted = parseInt(inputEl.value);
+    
+      const noteInput = document.getElementById(`task-note-${taskId}`);
+      const note = noteInput ? noteInput.value : "";
+    
+      fetch("/update_task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: taskId, completed: newCompleted, note: note })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (!data.success) {
+          alert("Update error.");
+          return;
+        }
+    
+        // Update progress fill
+        const fill = document.querySelector(`#task-progress-${taskId} .progress-fill`);
+        const percent = (data.task.completed / data.task.quantity) * 100;
+        if (fill) fill.style.width = `${percent}%`;
+    
+        // Update 剩下
+        const remaining = data.task.quantity - data.task.completed;
+        document.getElementById(`task-remaining-${taskId}`).textContent = remaining;
+    
+        // Update timestamp
+        const lastUpdateEl = document.getElementById(`task-last-update-${taskId}`);
+        if (lastUpdateEl) {
+          const date = data.task.timestamp.split(" ")[0];
+          lastUpdateEl.textContent = `${date} (+${data.task.delta})`;
+        }
+      })
+      .catch(error => {
+        console.error("Update failed:", error);
+        alert("Update error.");
+      });
+    }
+
+
+    function deleteTask(taskId) {
+      if (!confirm("Are you sure you want to delete this task?")) return;
+
+      fetch("/delete_task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: taskId })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert("Error: " + data.message);
+        }
+      })
+      .catch(error => console.error("Error deleting task:", error));
+    }
+
+    function showTaskHistory(taskId, orderId) {
+      // implement history popup if needed
+    }
+  </script>
+</head>
+<body>
+
+<nav>
+  <a href="/">🏠 Home</a>
+  <a href="/stations">📊 Station Progress</a>
+</nav>
+
+<h2>📊 Station Progress</h2>
+<p>Today: {{ today_date }}</p>
+
+<form method="get">
+  <label>選擇組別:</label>
+  <select name="group" onchange="this.form.submit()">
+    {% for name in station_list %}
+      <option value="{{ name }}" {% if name == selected_group %}selected{% endif %}>{{ name }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Progress</th>
+      <th>客戶交期</th>
+      <th>製令號碼</th>
+      <th>專案名稱</th>
+      <th>產品名稱</th>
+      <th>數量</th>
+      <th>作業內容</th>
+      <th>注意事項</th>
+      <th>已完成</th>
+      <th>剩下</th>
+      <th>最後更新</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in tasks %}
+    <tr>
+      <td>
+          <div class="progress-bar" id="task-progress-{{ item.task.id }}">
+            <div class="progress-fill" style="width: {{ (item.task.completed / item.task.quantity) * 100 }}%"></div>
+        </div>
+      </td>
+      <td>{{ item.order.delivery_date }}</td>
+      <td>{{ item.order.manufacture_code }}</td>
+      <td>{{ item.order.customer }}</td>
+      <td>{{ item.order.product }}</td>
+      <td>{{ item.task.quantity }}</td>
+      <td>{{ item.task.task }}</td>
+      <td>
+        <input type="text" id="task-note-{{ item.task.id }}" value="{{ item.task.note or '' }}">
+      </td>
+      <td><input type="number" id="task-completed-{{ item.task.id }}" value="{{ item.task.completed }}"></td>
+      <td id="task-remaining-{{ item.task.id }}">{{ item.task.quantity - item.task.completed }}</td>
+      <td id="last-update-{{ item.task.id }}">
+        {% if item.task.history %}
+          {{ item.task.history[-1].timestamp.split(' ')[0] }} (+{{ item.task.history[-1].delta }})
+        {% else %}-{% endif %}
+      </td>
+      <td>
+        <button onclick="updateTask({{ item.task.id }}, {{ item.task.quantity }})">Update</button>
+        <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order_id }})">History</button>
+        <button onclick="deleteTask({{ item.task.id }})" style="background-color: red; color: white;">Delete</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div id="historyModal" class="modal">
+  <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
+  <h3>Update History</h3>
+  <ul id="historyContent"></ul>
+</div>
+
+</body>
+</html>
