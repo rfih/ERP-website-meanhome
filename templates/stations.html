@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <title>Station Progress</title>
   <style>
-    body { font-family: Arial, sans-serif; background-color: #ededf0; padding: 20px; margin: 20px;}
-    nav a { margin-right: 15px; font-weight: bold; color: #333; text-decoration: none; }
+    body { font-family: Arial, sans-serif; background-color: #ededf0; padding: 20px; margin: 20px; font-size: 14px;}
+    nav a { margin-right: 15px; font-weight: bold; color: #333; text-decoration: none; font-size: 15px;}
     h2 { margin-top: 20px; }
     h1 { color: #333; }
     table {
@@ -19,6 +19,7 @@
     select { padding: 8px; font-size: 14px; }
     table { width: 100%; margin-top: 20px; background: white; border-collapse: collapse; }
     th, td {
+        max-width: 120px;
         padding: 10px;
         border: 1px solid #ddd;
         text-align: center;
@@ -33,17 +34,18 @@
     input[type="number"] {
       font-size: 14px;
       height: 18px;
-      width: 80px;
+      width: 150px;
     }
     input[type="text"] {
       font-size: 14px;
       height: 18px;
-      width: 100px;
+      width: 170px;
     }
     input, button {
         padding: 10px;
         border: none;
         border-radius: 5px;
+        font-size: 11px;
     }
     button {
         background-color: #333;
@@ -160,7 +162,42 @@
     }
 
     function showTaskHistory(taskId, orderId) {
-      // implement history popup if needed
+      fetch(`/task_history?order_id=${orderId}&task_id=${taskId}`)
+        .then(res => res.json())
+        .then(data => {
+          const list = document.getElementById("historyContent");
+          list.innerHTML = "";
+    
+          if (!data.history || data.history.length === 0) {
+            list.innerHTML = "<li>No updates yet.</li>";
+          } else {
+            // Group by date like index.html
+            const grouped = {};
+            data.history.forEach(item => {
+              const date = item.timestamp.split(" ")[0];
+              if (!grouped[date]) grouped[date] = [];
+              grouped[date].push(item);
+            });
+    
+            for (const date in grouped) {
+              const dateItem = document.createElement("li");
+              dateItem.innerHTML = `<strong>${date}</strong>`;
+              list.appendChild(dateItem);
+    
+              grouped[date].forEach(entry => {
+                const li = document.createElement("li");
+                li.textContent = `${entry.timestamp} → +${entry.delta}`;
+                list.appendChild(li);
+              });
+            }
+          }
+    
+          document.getElementById("historyModal").style.display = "block";
+        });
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).style.display = "none";
     }
   </script>
 </head>
@@ -202,7 +239,7 @@
   </thead>
   <tbody>
     {% for item in tasks %}
-    <tr>
+    <tr data-task-id="{{ item.task.id }}" data-order-id="{{ item.order_id }}" data-history='{{ item.task.history | tojson | safe }}'>
       <td>
           <div class="progress-bar" id="task-progress-{{ item.task.id }}">
             <div class="progress-fill" style="width: {{ (item.task.completed / item.task.quantity) * 100 }}%"></div>
@@ -226,7 +263,7 @@
       </td>
       <td>
         <button onclick="updateTask({{ item.task.id }}, {{ item.task.quantity }})">Update</button>
-        <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order_id }})">History</button>
+        <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order.id }})">History</button>
         <button onclick="deleteTask({{ item.task.id }})" style="background-color: red; color: white;">Delete</button>
       </td>
     </tr>

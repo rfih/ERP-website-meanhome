@@ -10,12 +10,13 @@
             background-color: #ededf0;
             margin: 20px;
             font-size: 14px;
+            padding: 20px;
             input[type="number"] {
             font-size: 14px;
             height: 10px;
-            width: 80px;
+            width: 150px;
         }
-        nav a { margin-right: 15px; font-weight: bold; color: #333; text-decoration: none; }
+        nav a { margin-right: 15px; font-weight: bold; color: #333; text-decoration: none; font-size: 15px;}
         
         h2 { margin-top: 20px; }
         
@@ -29,6 +30,7 @@
             overflow: hidden;
         }
         th, td {
+            max-width: 120px;
             padding: 10px;
             border: 1px solid #ddd;
             text-align: center;
@@ -36,6 +38,10 @@
         th { background-color: #333; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
         tr:hover { background-color: #ddd; }
+        tr.expanded-row {
+          border-top: 8px solid #f0f0f0; /* light divider */
+        }
+
         .progress-bar {
             width: 100%; height: 10px; background-color: #e0e0e0;
             border-radius: 5px; overflow: hidden;
@@ -48,6 +54,7 @@
             padding: 10px;
             border: none;
             border-radius: 5px;
+            font-size: 11px;
         }
         button {
             background-color: #333;
@@ -498,6 +505,7 @@
                 </table>
                 <button onclick="openModal('addTaskModal'); document.getElementById('task-order-id').value={{ order.id }}; openModal('addTaskModal');">Add Task</button>
             </td>
+            <tr><td colspan="100" style="height: 10px; background: #ededf0;"></td></tr>
         </tr>
         {% endfor %}
     </table>

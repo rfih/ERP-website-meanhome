@@ -201,6 +201,18 @@ def station_progress():
 
     return render_template("station_progress.html", station=station, tasks=filtered, today_date=today_date)
 
+@app.route("/task_history")
+def task_history():
+    order_id = int(request.args.get("order_id"))
+    task_id = int(request.args.get("task_id"))
+
+    for order in orders:
+        if order["id"] == order_id:
+            for task in order["sub_tasks"]:
+                if task["id"] == task_id:
+                    return jsonify({"history": task.get("history", [])})
+
+    return jsonify({"history": []})
 
 
 if __name__ == "__main__":
