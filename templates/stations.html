@@ -100,65 +100,47 @@
     
   </style>
   <script>
-    function updateTask(taskId) {
-      const inputEl = document.getElementById(`task-completed-${taskId}`);
+    function updateTask(taskId, orderId) {
+      const inputEl = document.getElementById(`task-completed-${taskId}-${orderId}`);
       const newCompleted = parseInt(inputEl.value);
     
-      const noteInput = document.getElementById(`task-note-${taskId}`);
+      const noteInput = document.getElementById(`task-note-${taskId}-${orderId}`);
       const note = noteInput ? noteInput.value : "";
     
       fetch("/update_task", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: taskId, completed: newCompleted, note: note })
+        body: JSON.stringify({ task_id: taskId, order_id: orderId, completed: newCompleted, note: note })
       })
-      .then(response => response.json())
+      .then(res => res.json())
       .then(data => {
-        if (!data.success) {
-          alert("Update error.");
-          return;
-        }
-    
-        // Update progress fill
-        const fill = document.querySelector(`#task-progress-${taskId} .progress-fill`);
-        const percent = (data.task.completed / data.task.quantity) * 100;
-        if (fill) fill.style.width = `${percent}%`;
-    
-        // Update 剩下
-        const remaining = data.task.quantity - data.task.completed;
-        document.getElementById(`task-remaining-${taskId}`).textContent = remaining;
-    
-        // Update timestamp
-        const lastUpdateEl = document.getElementById(`task-last-update-${taskId}`);
+        if (!data.success) return alert("Update error.");
+        const fill = document.querySelector(`#task-progress-${taskId}-${orderId} .progress-fill`);
+        if (fill) fill.style.width = `${(data.task.completed / data.task.quantity) * 100}%`;
+        document.getElementById(`task-remaining-${taskId}-${orderId}`).textContent = data.task.quantity - data.task.completed;
+        const lastUpdateEl = document.getElementById(`last-update-${taskId}-${orderId}`);
         if (lastUpdateEl) {
           const date = data.task.timestamp.split(" ")[0];
           lastUpdateEl.textContent = `${date} (+${data.task.delta})`;
         }
       })
-      .catch(error => {
-        console.error("Update failed:", error);
-        alert("Update error.");
-      });
+      .catch(err => console.error("Update failed:", err));
     }
-
-
-    function deleteTask(taskId) {
+    
+    function deleteTask(taskId, orderId) {
       if (!confirm("Are you sure you want to delete this task?")) return;
-
+    
       fetch("/delete_task", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ task_id: taskId })
+        body: JSON.stringify({ task_id: taskId, order_id: orderId })
       })
-      .then(response => response.json())
+      .then(res => res.json())
       .then(data => {
-        if (data.success) {
-          location.reload();
-        } else {
-          alert("Error: " + data.message);
-        }
+        if (data.success) location.reload();
+        else alert("Delete failed.");
       })
-      .catch(error => console.error("Error deleting task:", error));
+      .catch(err => console.error("Delete error:", err));
     }
 
     function showTaskHistory(taskId, orderId) {
@@ -239,10 +221,10 @@
   </thead>
   <tbody>
     {% for item in tasks %}
-    <tr data-task-id="{{ item.task.id }}" data-order-id="{{ item.order_id }}" data-history='{{ item.task.history | tojson | safe }}'>
+    <tr>
       <td>
-          <div class="progress-bar" id="task-progress-{{ item.task.id }}">
-            <div class="progress-fill" style="width: {{ (item.task.completed / item.task.quantity) * 100 }}%"></div>
+        <div class="progress-bar" id="task-progress-{{ item.task.id }}-{{ item.order.id }}">
+          <div class="progress-fill" style="width: {{ (item.task.completed / item.task.quantity) * 100 }}%"></div>
         </div>
       </td>
       <td>{{ item.order.delivery_date }}</td>
@@ -251,20 +233,22 @@
       <td>{{ item.order.product }}</td>
       <td>{{ item.task.quantity }}</td>
       <td>{{ item.task.task }}</td>
-      <td>
-        <input type="text" id="task-note-{{ item.task.id }}" value="{{ item.task.note or '' }}">
+      <<td>
+        <input type="text" id="task-note-{{ item.task.id }}-{{ item.order.id }}" value="{{ item.task.note or '' }}">
       </td>
-      <td><input type="number" id="task-completed-{{ item.task.id }}" value="{{ item.task.completed }}"></td>
-      <td id="task-remaining-{{ item.task.id }}">{{ item.task.quantity - item.task.completed }}</td>
-      <td id="last-update-{{ item.task.id }}">
+      <td>
+        <input type="number" id="task-completed-{{ item.task.id }}-{{ item.order.id }}" value="{{ item.task.completed }}">
+      </td>
+      <td id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">{{ item.task.quantity - item.task.completed }}</td>
+      <td id="last-update-{{ item.task.id }}-{{ item.order.id }}">
         {% if item.task.history %}
           {{ item.task.history[-1].timestamp.split(' ')[0] }} (+{{ item.task.history[-1].delta }})
         {% else %}-{% endif %}
       </td>
       <td>
-        <button onclick="updateTask({{ item.task.id }}, {{ item.task.quantity }})">Update</button>
+        <button onclick="updateTask({{ item.task.id }}, {{ item.order.id }})">Update</button>
         <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order.id }})">History</button>
-        <button onclick="deleteTask({{ item.task.id }})" style="background-color: red; color: white;">Delete</button>
+        <button onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})" style="background:red;">Delete</button>
       </td>
     </tr>
     {% endfor %}

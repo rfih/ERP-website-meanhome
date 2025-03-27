@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
+import copy
 
 app = Flask(__name__)
 
-# Mock data for orders
 orders = [
     {
         "id": 1,
@@ -12,10 +12,33 @@ orders = [
         "customer": "森華",
         "product": "F60A",
         "quantity": 30,
-        "active_groups": ["框架", "膠合"],  # Groups currently working
+        "stations": ["框架組", "膠合組"],
+        "active_groups": ["框架組", "膠合組"],
         "sub_tasks": [
-            {"id": 1, "group": "框架組", "quantity": 15, "task": "釘門檻", "completed": 9, "history": [{"timestamp": "2025/03/24 08:00", "delta": 4}]},
-            {"id": 2, "group": "膠合組", "quantity": 30, "task": "貼木皮", "completed": 4, "history": [{"timestamp": "2025/03/24 08:00", "delta": 4}]}
+            {
+                "id": 1,
+                "group": "框架組",
+                "quantity": 15,
+                "task": "釘門檻",
+                "completed": 14,
+                "note": "",
+                "history": [
+                    {"timestamp": "2025/03/25 08:00", "delta": 3},
+                    {"timestamp": "2025/03/26 08:00", "delta": 4}
+                ]
+            },
+            {
+                "id": 2,
+                "group": "膠合組",
+                "quantity": 30,
+                "task": "貼木皮",
+                "completed": 20,
+                "note": "",
+                "history": [
+                    {"timestamp": "2025/03/25 08:00", "delta": 5},
+                    {"timestamp": "2025/03/26 08:00", "delta": 6}
+                ]
+            }
         ]
     },
     {
@@ -24,11 +47,32 @@ orders = [
         "manufacture_code": "B25000202",
         "customer": "大陸工程",
         "product": "F30A",
-        "quantity": 30,
-        "active_groups": ["框架", "膠合"],  # Groups currently working
+        "quantity": 40,
+        "stations": ["框架組", "膠合組"],
+        "active_groups": ["框架組", "膠合組"],
         "sub_tasks": [
-            {"id": 1, "group": "框架組", "quantity": 20, "task": "釘門檻", "completed": 3, "history": [{"timestamp": "2025/03/24 08:00", "delta": 4}]},
-            {"id": 2, "group": "膠合組", "quantity": 40, "task": "貼木皮", "completed": 2, "history": [{"timestamp": "2025/03/24 08:00", "delta": 4}]}
+            {
+                "id": 3,  # ✅ UNIQUE across all orders
+                "group": "框架組",
+                "quantity": 15,
+                "task": "釘門檻",
+                "completed": 10,
+                "note": "",
+                "history": [
+                    {"timestamp": "2025/03/26 09:00", "delta": 2}
+                ]
+            },
+            {
+                "id": 4,  # ✅ UNIQUE across all orders
+                "group": "膠合組",
+                "quantity": 40,
+                "task": "貼木皮",
+                "completed": 33,
+                "note": "",
+                "history": [
+                    {"timestamp": "2025/03/25 09:00", "delta": 7}
+                ]
+            }
         ]
     }
 ]
@@ -43,13 +87,18 @@ def update_task():
     data = request.json
     now = datetime.now().strftime("%Y/%m/%d %H:%M")
 
+    task_id = data["task_id"]
+    order_id = data["order_id"]  # ✅ NEW
+
     for order in orders:
+        if order["id"] != order_id:  # ✅ Filter by specific order only
+            continue
         for task in order["sub_tasks"]:
-            if task["id"] == data["task_id"]:
+            if task["id"] == task_id:
                 prev = task["completed"]
                 delta = data["completed"] - prev
                 task["completed"] = data["completed"]
-                
+
                 if "note" in data:
                     task["note"] = data["note"]
 
@@ -69,6 +118,7 @@ def update_task():
                         "delta": delta
                     }
                 })
+
     return jsonify({ "success": False, "message": "Task not found" })
 
 @app.route("/add_order", methods=["POST"])
@@ -90,35 +140,42 @@ def add_order():
 @app.route("/add_task", methods=["POST"])
 def add_task():
     data = request.json
+
+    # Compute a unique task id across all orders
+    existing_ids = [task["id"] for order in orders for task in order["sub_tasks"]]
+    new_task_id = max(existing_ids, default=0) + 1
+
     for order in orders:
         if order["id"] == data["order_id"]:
             new_task = {
-                "id": len(order["sub_tasks"]) + 1,
+                "id": new_task_id,  # ✅ Globally unique
                 "group": data["group"],
                 "quantity": data["quantity"],
                 "task": data["task"],
-                "completed": data["completed"]
+                "completed": data["completed"],
+                "note": "",
+                "history": []
             }
             order["sub_tasks"].append(new_task)
 
-            # Update active groups
             if data["group"] not in order["active_groups"]:
                 order["active_groups"].append(data["group"])
             break
-    return jsonify({"success": True, "orders": orders})
+
+    return jsonify({"success": True})
 
 @app.route("/delete_task", methods=["POST"])
 def delete_task():
     data = request.json
+    task_id = data.get("task_id")
+    order_id = data.get("order_id")
+
     for order in orders:
-        # Remove the task
-        order["sub_tasks"] = [task for task in order["sub_tasks"] if task["id"] != data["task_id"]]
+        if order["id"] == order_id:
+            order["sub_tasks"] = [t for t in order["sub_tasks"] if t["id"] != task_id]
+            break
 
-        # Recalculate active_groups from remaining tasks
-        order["active_groups"] = list({task["group"] for task in order["sub_tasks"]})
-        
-    return jsonify({"success": True, "message": "Task deleted successfully"})
-
+    return jsonify({"success": True})
 
 @app.route("/delete_order", methods=["POST"])
 def delete_order():
@@ -160,24 +217,29 @@ def stations():
     ]
     selected_group = request.args.get("group", station_list[0])
 
-    tasks = []
+    filtered_orders = []
     for order in orders:
+        filtered_sub_tasks = [t for t in order["sub_tasks"] if t["group"] == selected_group]
+        if filtered_sub_tasks:
+            order_copy = copy.deepcopy(order)
+            order_copy["sub_tasks"] = filtered_sub_tasks
+            filtered_orders.append(order_copy)
+            
+    tasks = []
+    for order in filtered_orders:
         for task in order["sub_tasks"]:
-            if task["group"] == selected_group:
-                tasks.append({
-                    "order": order,
-                    "task": task
-                })
+            tasks.append({ "order": order, "task": task })
 
     today_date = datetime.today().strftime("%Y/%m/%d")
-    return render_template(
-        "stations.html",
+    print("Selected group:", selected_group, flush=True)
+    print("Filtered orders:", filtered_orders, flush=True)
+    return render_template("stations.html",
+        orders=filtered_orders,
         tasks=tasks,
         station_list=station_list,
         selected_group=selected_group,
-        today_date=today_date
-    )
-
+        today_date=today_date)
+    
 
 @app.route("/station_progress")
 def station_progress():

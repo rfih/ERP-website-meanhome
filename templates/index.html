@@ -154,14 +154,22 @@
             })
             .catch(error => console.error("Error adding order:", error));
         }
-        function updateTask(taskId) {
+        function updateTask(taskId, orderId) {
           const inputEl = document.getElementById(`task-completed-${taskId}`);
           const newCompleted = parseInt(inputEl.value);
+        
+          const noteInput = document.getElementById(`task-note-${taskId}`);
+          const note = noteInput ? noteInput.value : "";
         
           fetch("/update_task", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ task_id: taskId, completed: newCompleted })
+            body: JSON.stringify({
+              task_id: taskId,
+              order_id: orderId,
+              completed: newCompleted,
+              note: note
+            })
           })
           .then(response => response.json())
           .then(data => {
@@ -170,17 +178,14 @@
               return;
             }
         
-            // Update progress fill
             const fill = document.querySelector(`#task-progress-${taskId} .progress-fill`);
             const percent = (data.task.completed / data.task.quantity) * 100;
             if (fill) fill.style.width = `${percent}%`;
         
-            // Update 剩下
             const remaining = data.task.quantity - data.task.completed;
             document.getElementById(`task-remaining-${taskId}`).textContent = remaining;
         
-            // Update timestamp
-            const lastUpdateEl = document.getElementById(`task-last-update-${taskId}`);
+            const lastUpdateEl = document.getElementById(`last-update-${taskId}`);
             if (lastUpdateEl) {
               const date = data.task.timestamp.split(" ")[0];
               lastUpdateEl.textContent = `${date} (+${data.task.delta})`;
@@ -226,24 +231,24 @@
             .catch(error => console.error("Error adding task:", error));
         }
         
-        function deleteTask(taskId) {
+        function deleteTask(taskId, orderId) {
             if (!confirm("Are you sure you want to delete this task?")) return;
         
             fetch("/delete_task", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ task_id: taskId })
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ task_id: taskId, order_id: orderId })
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert("Error: " + data.message);
-                }
+              if (data.success) {
+                location.reload();
+              } else {
+                alert("Error: " + data.message);
+              }
             })
-            .catch(error => console.error("Error deleting task:", error));
-        }
+            .catch(err => console.error("Delete error:", err));
+          }
         
         function deleteOrder(orderId) {
             if (!confirm("Are you sure you want to delete this order? This will remove all its tasks!")) return;
@@ -264,7 +269,11 @@
             .catch(error => console.error("Error deleting order:", error));
         }
         
+       let currentTaskId = null;
+
         function showTaskHistory(taskId, orderId) {
+            currentTaskId = taskId;
+        
             const allOrders = JSON.parse(document.getElementById("orders-data").textContent);
             const order = allOrders.find(o => o.id === orderId);
             const task = order?.sub_tasks.find(t => t.id === taskId);
@@ -285,15 +294,15 @@
                     const dateHeader = document.createElement("li");
                     dateHeader.innerHTML = `<strong>${date}</strong>`;
                     historyContent.appendChild(dateHeader);
-                
+        
                     const entries = grouped[date];
                     for (let i = 0; i < entries.length; i++) {
                         const current = entries[i];
                         const prev = entries[i - 1];
                         const li = document.createElement("li");
-                
+        
                         let text = `${current.timestamp} → ${current.delta >= 0 ? '+' : ''}${current.delta}`;
-                
+        
                         if (prev) {
                             const t1 = new Date(prev.timestamp);
                             const t2 = new Date(current.timestamp);
@@ -301,7 +310,7 @@
                             const timePerPiece = current.delta !== 0 ? (diffMin / current.delta).toFixed(2) : "-";
                             text += ` | ${diffMin} mins later | ~${timePerPiece} min/piece`;
                         }
-                
+        
                         li.textContent = text;
                         historyContent.appendChild(li);
                     }
@@ -310,8 +319,30 @@
                 historyContent.innerHTML = "<li>No history</li>";
             }
         
+            // Add editable note section to modal
+            const noteContainer = document.getElementById("noteEditor");
+            if (noteContainer) {
+                noteContainer.value = task?.note || "";
+            }
+        
             openModal("historyModal");
         }
+        
+        function saveTaskNote() {
+            const note = document.getElementById("noteEditor").value;
+        
+            fetch("/update_task", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ task_id: currentTaskId, note: note })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) return alert("Error saving note");
+                alert("Note saved!");
+            });
+        }
+
         
         let currentSortCol = null;
         let sortAsc = true;
@@ -498,7 +529,7 @@
                         <td>
                             <button onclick="updateTask({{ task.id }}, {{ order.id }})">Update</button>
                             <button onclick="showTaskHistory({{ task.id }}, {{ order.id }})">History</button>
-                            <button onclick="deleteTask({{ task.id }})" style="background-color: red;">Delete</button>
+                            <button onclick="deleteTask({{ task.id }}, {{ order.id }})" style="background-color: red; color: white;">Delete</button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -578,6 +609,9 @@
         <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
         <h3>Update History</h3>
         <ul id="historyContent"></ul>
+        <label>注意事項 (Note):</label>
+        <textarea id="noteEditor" rows="3" style="width: 100%;"></textarea>
+        <button onclick="saveTaskNote()">Save Note</button>
     </div>
 </body>
 </html>
