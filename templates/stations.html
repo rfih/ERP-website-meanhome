@@ -102,6 +102,11 @@
         font-size: 12px;
         color: #666;
       }
+      .print-label {
+        display: none; 
+        font-size: 10px;
+        color: #999;
+      }
 
       @media print {
         .print-only {
@@ -110,7 +115,7 @@
           min-height: 10px;
         }
         .print-label {
-          display: inline;
+          display: block;
         }
       nav, form, button, .modal, .no-print,
       th:nth-child(1), th:nth-child(9), th:nth-child(11), th:nth-child(12),
