@@ -97,6 +97,57 @@
         box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
     }
     
+      .print-only {
+        display: none;
+        font-size: 12px;
+        color: #666;
+      }
+
+      @media print {
+        .print-only {
+          display: table-cell !important;
+          border: 1px solid #999;
+          min-height: 10px;
+        }
+        .print-label {
+          display: inline;
+        }
+      nav, form, button, .modal, .no-print,
+      th:nth-child(1), th:nth-child(9), th:nth-child(11), th:nth-child(12),
+      td:nth-child(1), td:nth-child(9), td:nth-child(11), td:nth-child(12) {
+        display: none !important;
+      }
+    
+      .progress-bar { display: none; }
+
+    
+      body {
+        background: white;
+        margin: 0;
+        padding: 10px;
+        font-size: 12px;
+      }
+    
+      table {
+        page-break-inside: avoid;
+        width: 100%;
+        border-collapse: collapse;
+      }
+    
+      th, td {
+        font-size: 12px;
+        border: 1px solid #999;
+        padding: 6px;
+      }
+      
+      h2::after {
+        content: " - {{ selected_group }}";
+      }
+    
+      @page {
+        margin: 10mm;
+      }
+    }
     
   </style>
   <script>
@@ -181,6 +232,86 @@
     function closeModal(id) {
       document.getElementById(id).style.display = "none";
     }
+    
+    let currentSortCol = null;
+    let sortAsc = true;
+    let originalStationRows = [];
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const tbody = document.querySelector("table tbody");
+      originalStationRows = Array.from(tbody.rows);
+    });
+
+    function sortStationTable(colIndex) {
+      const table = document.querySelector("table");
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.rows);
+
+      rows.sort((a, b) => {
+        const getText = (row) => row.cells[colIndex]?.innerText.trim();
+        const valA = getText(a);
+        const valB = getText(b);
+
+        if (colIndex === 0) {
+          const progress = row => parseFloat(row.querySelector(".progress-fill")?.style.width || 0);
+          return (progress(a) - progress(b)) * (sortAsc ? 1 : -1);
+        }
+
+        if (colIndex === 1) {
+          const dateA = new Date(valA.replaceAll('/', '-'));
+          const dateB = new Date(valB.replaceAll('/', '-'));
+          return (dateA - dateB) * (sortAsc ? 1 : -1);
+        }
+
+        const aNum = parseFloat(valA);
+        const bNum = parseFloat(valB);
+        const isNumber = !isNaN(aNum) && !isNaN(bNum);
+
+        return isNumber
+          ? (aNum - bNum) * (sortAsc ? 1 : -1)
+          : valA.localeCompare(valB, 'zh') * (sortAsc ? 1 : -1);
+      });
+
+      tbody.innerHTML = "";
+      rows.forEach(row => tbody.appendChild(row));
+
+      sortAsc = currentSortCol === colIndex ? !sortAsc : true;
+      currentSortCol = colIndex;
+
+      updateStationSortIcons(colIndex);
+    }
+
+    function updateStationSortIcons(activeCol) {
+      const headers = document.querySelectorAll("table thead th");
+      headers.forEach((th, i) => {
+        const label = th.innerText.replace(/[\s\u2191\u2193]/g, '').trim();
+        if (i === activeCol) {
+          th.innerHTML = `${label} ${sortAsc ? '↑' : '↓'}`;
+        } else {
+          th.innerHTML = `${label} ↑↓`;
+        }
+      });
+    }
+
+    function resetStationSort() {
+      const tbody = document.querySelector("table tbody");
+      tbody.innerHTML = "";
+      originalStationRows.forEach(row => tbody.appendChild(row.cloneNode(true)));
+      updateStationSortIcons(null);
+      currentSortCol = null;
+    }
+    
+    function printPage() {
+      const buttons = document.querySelectorAll("button, nav, select");
+      buttons.forEach(btn => btn.style.display = "none");
+  
+      window.print();
+  
+      setTimeout(() => {
+        buttons.forEach(btn => btn.style.display = "");
+      }, 1000);
+    }
+    
   </script>
 </head>
 <body>
@@ -193,30 +324,35 @@
 <h2>📊 Station Progress</h2>
 <p>Today: {{ today_date }}</p>
 
-<form method="get">
+<form method="get" style="display:flex; align-items: center; gap: 10px;">
   <label>選擇組別:</label>
   <select name="group" onchange="this.form.submit()">
     {% for name in station_list %}
       <option value="{{ name }}" {% if name == selected_group %}selected{% endif %}>{{ name }}</option>
     {% endfor %}
   </select>
+  <button type="button" onclick="resetStationSort()">Clear Sort</button>
+  <button type="button" onclick="printPage()">🖨️ Print This Station</button>
 </form>
 
 <table>
   <thead>
     <tr>
-      <th>Progress</th>
-      <th>客戶交期</th>
-      <th>製令號碼</th>
-      <th>專案名稱</th>
-      <th>產品名稱</th>
-      <th>數量</th>
-      <th>作業內容</th>
-      <th>注意事項</th>
-      <th>已完成</th>
-      <th>剩下</th>
-      <th>最後更新</th>
+      <th onclick="sortStationTable(0)">Progress ↑↓</th>
+      <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
+      <th onclick="sortStationTable(2)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
+      <th onclick="sortStationTable(3)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
+      <th onclick="sortStationTable(4)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
+      <th onclick="sortStationTable(5)">製令數量 ↑↓<span class="print-label"><br>Jumlah Pesanan</span></th>
+      <th onclick="sortStationTable(6)">作業內容 ↑↓<span class="print-label"><br>Isi Pekerjaan</span></th>
+      <th>注意事項<br><span class="print-label">Hal yang Perlu Diperhatikan</span></th>
+      <th onclick="sortStationTable(8)">已完成 ↑↓</th>
+      <th onclick="sortStationTable(9)">剩下 ↑↓<span class="print-label"><br>Jumlah Proyek</span></th>
+      <th onclick="sortStationTable(10)">最後更新 ↑↓</th>
       <th>Actions</th>
+      <th class="print-only">良品數量<span class="print-label"><br>Jumlah Produk Lolos</span></th>
+      <th class="print-only">不良品數量<span class="print-label"><br>Jumlah Produk Tidak Lolos</span></th>
+      <th class="print-only">生產總時間(分)<span class="print-label"><br>Total Waktu Produksi (dalam menit)</span></th>
     </tr>
   </thead>
   <tbody>
@@ -233,7 +369,7 @@
       <td>{{ item.order.product }}</td>
       <td>{{ item.task.quantity }}</td>
       <td>{{ item.task.task }}</td>
-      <<td>
+      <td>
         <input type="text" id="task-note-{{ item.task.id }}-{{ item.order.id }}" value="{{ item.task.note or '' }}">
       </td>
       <td>
@@ -249,6 +385,9 @@
         <button onclick="updateTask({{ item.task.id }}, {{ item.order.id }})">Update</button>
         <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order.id }})">History</button>
         <button onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})" style="background:red;">Delete</button>
+        <td class="print-only"></td>
+        <td class="print-only"></td>
+        <td class="print-only"></td>
       </td>
     </tr>
     {% endfor %}

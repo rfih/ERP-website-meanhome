@@ -154,6 +154,7 @@
             })
             .catch(error => console.error("Error adding order:", error));
         }
+        
         function updateTask(taskId, orderId) {
           const inputEl = document.getElementById(`task-completed-${taskId}`);
           const newCompleted = parseInt(inputEl.value);
@@ -178,17 +179,40 @@
               return;
             }
         
+            // Individual task bar
             const fill = document.querySelector(`#task-progress-${taskId} .progress-fill`);
             const percent = (data.task.completed / data.task.quantity) * 100;
             if (fill) fill.style.width = `${percent}%`;
         
-            const remaining = data.task.quantity - data.task.completed;
-            document.getElementById(`task-remaining-${taskId}`).textContent = remaining;
+            document.getElementById(`task-remaining-${taskId}`).textContent = data.task.quantity - data.task.completed;
         
             const lastUpdateEl = document.getElementById(`last-update-${taskId}`);
             if (lastUpdateEl) {
               const date = data.task.timestamp.split(" ")[0];
               lastUpdateEl.textContent = `${date} (+${data.task.delta})`;
+            }
+        
+            // 🔁 Recalculate from live DOM instead of stale JSON
+            let totalCompleted = 0;
+            let totalQuantity = 0;
+            
+            document.querySelectorAll(`#details-${orderId} input[id^="task-completed-"]`).forEach(input => {
+              const val = parseInt(input.value) || 0;
+              totalCompleted += val;
+            });
+            
+            document.querySelectorAll(`#details-${orderId} tr`).forEach(row => {
+              const qtyCell = row.querySelector("td:nth-child(3)");
+              if (qtyCell) {
+                const qty = parseInt(qtyCell.textContent) || 0;
+                totalQuantity += qty;
+              }
+            });
+            
+            const orderProgress = document.querySelector(`#order-progress-${orderId} .progress-fill`);
+            if (orderProgress && totalQuantity > 0) {
+              const percent = Math.min(100, (totalCompleted / totalQuantity) * 100);
+              orderProgress.style.width = `${percent}%`;
             }
           })
           .catch(error => {
@@ -196,6 +220,7 @@
             alert("Update error.");
           });
         }
+
 
         function addNewTask() {
             let orderId = document.getElementById("task-order-id").value;
@@ -349,58 +374,74 @@
         let originalRowGroups = [];
         
         function sortTable(colIndex) {
-            const table = document.getElementById("order-table");
-            const tbody = table.tBodies[0];
-            const allRows = Array.from(tbody.rows);
+          const table = document.getElementById("order-table");
+          const tbody = table.tBodies[0];
+          const allRows = Array.from(tbody.rows);
         
-            // Pair main row + detail row
-            const groupedRows = [];
-            for (let i = 0; i < allRows.length; i++) {
-                const row = allRows[i];
-                if (!row.id.startsWith("details-")) {
-                    const detailRow = allRows[i + 1]?.id === `details-${row.dataset.orderId}` ? allRows[i + 1] : null;
-                    groupedRows.push([row, detailRow]);
-                }
+          // Separate out the separator rows
+          const separatorRows = allRows.filter(row => row.classList.contains("separator-row"));
+        
+          // Remove all rows (reset)
+          allRows.forEach(row => {
+            if (row.classList.contains("separator-row")) {
+              row.remove();
+            }
+          });
+        
+          // Get only main + detail rows, skip separators
+          const cleanRows = allRows.filter(row => !row.classList.contains("separator-row"));
+        
+          // Group main and detail rows
+          const groupedRows = [];
+          for (let i = 0; i < cleanRows.length; i++) {
+            const row = cleanRows[i];
+            if (!row.id.startsWith("details-")) {
+              const detailRow = cleanRows[i + 1]?.id === `details-${row.dataset.orderId}` ? cleanRows[i + 1] : null;
+              groupedRows.push([row, detailRow]);
+            }
+          }
+        
+          // Sort logic
+          groupedRows.sort((a, b) => {
+            const cellA = a[0].cells[colIndex].innerText.trim();
+            const cellB = b[0].cells[colIndex].innerText.trim();
+        
+            if (colIndex === 1) {
+              const dateA = new Date(cellA.replaceAll('/', '-'));
+              const dateB = new Date(cellB.replaceAll('/', '-'));
+              return (dateA - dateB) * (sortAsc ? 1 : -1);
             }
         
-            groupedRows.sort((a, b) => {
-                const cellA = a[0].cells[colIndex].innerText.trim();
-                const cellB = b[0].cells[colIndex].innerText.trim();
+            if (colIndex === 0) {
+              const progressA = parseFloat(a[0].querySelector('.progress-fill')?.style.width || '0');
+              const progressB = parseFloat(b[0].querySelector('.progress-fill')?.style.width || '0');
+              return (progressA - progressB) * (sortAsc ? 1 : -1);
+            }
         
-                // Special case: 客戶交期 (Date)
-                if (colIndex === 1) {
-                    const dateA = new Date(cellA.replaceAll('/', '-'));
-                    const dateB = new Date(cellB.replaceAll('/', '-'));
-                    return (dateA - dateB) * (sortAsc ? 1 : -1);
-                }
+            const aNum = parseFloat(cellA);
+            const bNum = parseFloat(cellB);
+            const isNumber = !isNaN(aNum) && !isNaN(bNum);
         
-                // Special case: Progress (col 0) - read width from progress-fill
-                if (colIndex === 0) {
-                    const progressA = parseFloat(a[0].querySelector('.progress-fill')?.style.width || '0');
-                    const progressB = parseFloat(b[0].querySelector('.progress-fill')?.style.width || '0');
-                    return (progressA - progressB) * (sortAsc ? 1 : -1);
-                }
+            return isNumber
+              ? (aNum - bNum) * (sortAsc ? 1 : -1)
+              : cellA.localeCompare(cellB, 'zh') * (sortAsc ? 1 : -1);
+          });
         
-                // Default: number or text
-                const aNum = parseFloat(cellA);
-                const bNum = parseFloat(cellB);
-                const isNumber = !isNaN(aNum) && !isNaN(bNum);
+          // Toggle and update
+          sortAsc = currentSortCol === colIndex ? !sortAsc : true;
+          currentSortCol = colIndex;
         
-                return isNumber
-                    ? (aNum - bNum) * (sortAsc ? 1 : -1)
-                    : cellA.localeCompare(cellB, 'zh') * (sortAsc ? 1 : -1);
-            });
+          // Re-append rows with a separator between each order
+          groupedRows.forEach(([main, detail], index) => {
+            tbody.appendChild(main);
+            if (detail) tbody.appendChild(detail);
+            const sep = document.createElement("tr");
+            sep.className = "separator-row";
+            sep.innerHTML = `<td colspan="${main.cells.length}" style="height:10px;background:#f0f0f0;border: none;"></td>`;
+            tbody.appendChild(sep);
+          });
         
-            // Toggle and update
-            sortAsc = currentSortCol === colIndex ? !sortAsc : true;
-            currentSortCol = colIndex;
-        
-            groupedRows.forEach(([main, detail]) => {
-                tbody.appendChild(main);
-                if (detail) tbody.appendChild(detail);
-            });
-        
-            updateSortIcons(colIndex);
+          updateSortIcons(colIndex);
         }
 
         function updateSortIcons(activeCol) {
@@ -416,15 +457,22 @@
         }
         
         function resetSort() {
-            const tbody = document.querySelector("#order-table tbody");
-            originalRowGroups.forEach(([main, detail]) => {
-                tbody.appendChild(main);
-                if (detail) tbody.appendChild(detail);
-            });
+          const tbody = document.querySelector("#order-table tbody");
+          tbody.innerHTML = ""; // Clear everything
         
-            updateSortIcons(null); // reset icons
-            currentSortCol = null;
+          originalRowGroups.forEach(([main, detail]) => {
+            tbody.appendChild(main);
+            if (detail) tbody.appendChild(detail);
+        
+            const sep = document.createElement("tr");
+            sep.className = "separator-row";
+            sep.innerHTML = `<td colspan="8" style="height:10px;background:#f0f0f0;border:none;"></td>`;
+          });
+        
+          updateSortIcons(null);
+          currentSortCol = null;
         }
+
         
         function updateSortIcons(activeCol) {
             const headers = document.querySelectorAll("#order-table thead th");
@@ -481,8 +529,11 @@
         {% for order in orders %}
         <tr data-order-id="{{ order.id }}">
             <td>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: {{ (order.sub_tasks | sum(attribute='completed') / order.quantity) * 100 }}%;"></div>
+                {% set total_completed = order.sub_tasks | sum(attribute='completed') %}
+                {% set total_quantity = order.sub_tasks | sum(attribute='quantity') %}
+                {% set percent = (total_completed / total_quantity * 100) if total_quantity > 0 else 0 %}
+                <div class="progress-bar" id="order-progress-{{ order.id }}">
+                    <div class="progress-fill" style="width: {{ percent }}%"></div>
                 </div>
             </td>
             <td>{{ order.delivery_date }}</td>
@@ -536,7 +587,7 @@
                 </table>
                 <button onclick="openModal('addTaskModal'); document.getElementById('task-order-id').value={{ order.id }}; openModal('addTaskModal');">Add Task</button>
             </td>
-            <tr><td colspan="100" style="height: 10px; background: #ededf0;"></td></tr>
+            <tr class="separator-row"><td colspan="8" style="height: 10px; background: #ededf0;"></td></tr>
         </tr>
         {% endfor %}
     </table>
