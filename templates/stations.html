@@ -36,10 +36,11 @@
       height: 18px;
       width: 150px;
     }
-    input[type="text"] {
+    textarea {
+      resize: vertical;
       font-size: 14px;
-      height: 18px;
-      width: 170px;
+      height: 40px;
+      width: 160px;
     }
     input, button {
         padding: 10px;
@@ -102,6 +103,9 @@
         font-size: 12px;
         color: #666;
       }
+      
+      .screen-only { display: block; }
+      
       .print-label {
         display: none; 
         font-size: 10px;
@@ -109,6 +113,7 @@
       }
 
       @media print {
+        .screen-only { display: none !important; }
         .print-only {
           display: table-cell !important;
           border: 1px solid #999;
@@ -116,6 +121,13 @@
         }
         .print-label {
           display: block;
+        }
+        .print-note {
+          white-space: pre-wrap;
+          font-size: 12px;
+          padding: 4px;
+          min-height: 20px;
+          border: none !important;
         }
       nav, form, button, .modal, .no-print,
       th:nth-child(1), th:nth-child(9), th:nth-child(11), th:nth-child(12),
@@ -375,7 +387,8 @@
       <td>{{ item.task.quantity }}</td>
       <td>{{ item.task.task }}</td>
       <td>
-        <input type="text" id="task-note-{{ item.task.id }}-{{ item.order.id }}" value="{{ item.task.note or '' }}">
+        <textarea id="task-note-{{ item.task.id }}-{{ item.order.id }}" rows="2" style="width: 100%;" class="screen-only">{{ item.task.note or '' }}</textarea>
+        <div class="print-note print-only">{{ item.task.note or '' }}</div>
       </td>
       <td>
         <input type="number" id="task-completed-{{ item.task.id }}-{{ item.order.id }}" value="{{ item.task.completed }}">

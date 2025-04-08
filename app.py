@@ -162,7 +162,7 @@ def add_task():
                 order["active_groups"].append(data["group"])
             break
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "task": new_task, "order_id": data["order_id"]})
 
 @app.route("/delete_task", methods=["POST"])
 def delete_task():
@@ -173,6 +173,7 @@ def delete_task():
     for order in orders:
         if order["id"] == order_id:
             order["sub_tasks"] = [t for t in order["sub_tasks"] if t["id"] != task_id]
+            order["active_groups"] = sorted({t["group"] for t in order["sub_tasks"] if t["group"]})
             break
 
     return jsonify({"success": True})
@@ -275,6 +276,66 @@ def task_history():
                     return jsonify({"history": task.get("history", [])})
 
     return jsonify({"history": []})
+
+@app.route("/update_order", methods=["POST"])
+def update_order():
+    data = request.json
+    for order in orders:
+        if order["id"] == data["order_id"]:
+            order["manufacture_code"] = data["manufacture_code"]
+            order["customer"] = data["customer"]
+            order["product"] = data["product"]
+            order["delivery_date"] = data["delivery_date"]
+            order["quantity"] = int(data["quantity"])
+            return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Order not found"})
+
+@app.route("/update_task_info", methods=["POST"])
+def update_task_info():
+    data = request.json
+    for order in orders:
+        if order["id"] == data["order_id"]:
+            for task in order["sub_tasks"]:
+                if task["id"] == data["task_id"]:
+                    task["group"] = data["group"]
+                    task["task"] = data["task"]
+                    task["quantity"] = data["quantity"]
+                    order["active_groups"] = list({t["group"] for t in order["sub_tasks"] if t.get("group")})
+                    return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Task not found"})
+
+def recalculate_active_groups(order):
+    order["active_groups"] = sorted(
+        {task["group"] for task in order["sub_tasks"] if task["group"]}
+    )
+
+@app.route("/get_task/<int:task_id>")
+def get_task(task_id):
+    for order in orders:
+        for task in order["sub_tasks"]:
+            if task["id"] == task_id:
+                return jsonify({
+                    "task": task,
+                    "order_id": order["id"]
+                })
+    return jsonify({ "error": "not found" }), 404
+
+@app.route("/update_note", methods=["POST"])
+def update_note():
+    data = request.get_json()
+    task_id = data.get("task_id")
+    order_id = data.get("order_id")
+    new_note = data.get("note")
+
+    for order in orders:
+        if order["id"] == order_id:
+            for task in order["sub_tasks"]:
+                if task["id"] == task_id:
+                    task["note"] = new_note
+                    return jsonify({"success": True})
+
+    return jsonify({"success": False, "message": "Task or order not found"})
+
 
 
 if __name__ == "__main__":

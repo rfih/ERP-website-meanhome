@@ -105,9 +105,69 @@
             border-color: #007bff;
             box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
         }
+        
+        select#station-name {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 16px;
+            background-color: #fff;
+            width: 100%;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        select#station-name:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+        }
+        
+        select#edit-station-name {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 16px;
+            background-color: #fff;
+            width: 100%;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        select#edit-station-name:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+        }
+        
+        @media print {
+          .separator-row,
+          tr[id^="details-"],
+          .modal,
+          nav,
+          button,
+          #addOrderModal,
+          #addTaskModal {
+            display: none !important;
+          }
+        
+          .progress-bar {
+            height: 8px;
+          }
+        
+          td, th {
+            font-size: 12px;
+            padding: 6px;
+          }
+        
+          @page {
+            margin: 20mm;
+          }
+        }
+
     </style>
     <script id="orders-data" type="application/json">{{ orders | tojson | safe }}</script>
+
     <script>
+        const orders = JSON.parse(document.getElementById("orders-data").textContent);
         function openModal(modalId) {
             document.getElementById(modalId).style.display = "block";
         }
@@ -246,34 +306,82 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    closeModal('addTaskModal');
-                    location.reload();
-                } else {
-                    alert("Error: " + data.message);
+              if (data.success) {
+                closeModal("addTaskModal");
+            
+                const orderId = data.order_id;
+                const task = data.task;
+            
+                // 1. Update 現場組別
+                const groupCell = document.querySelector(`tr[data-order-id="${orderId}"] td:nth-child(7)`);
+                if (groupCell) {
+                  const currentGroups = new Set(groupCell.textContent.split(",").map(g => g.trim()).filter(Boolean));
+                  currentGroups.add(task.group);
+                  groupCell.textContent = [...currentGroups].join(", ");
                 }
+            
+                // 2. Fetch full task info, append row, update orders-data
+                fetch(`/get_task/${task.id}`)
+                  .then(res => res.json())
+                  .then(data => {
+                    const fullTask = data.task;
+            
+                    const taskTable = document.querySelector(`#details-${orderId} table`);
+                    if (taskTable) {
+                      taskTable.appendChild(renderTaskRow(fullTask, orderId));
+                    }
+            
+                    // ✅ Inject into orders-data for live History/Edit
+                    const order = orders.find(o => o.id === orderId);
+                    
+                    if (order) {
+                      order.sub_tasks.push(fullTask);
+                      
+                    }
+                  });
+              } else {
+                alert("Error: " + data.message);
+              }
             })
             .catch(error => console.error("Error adding task:", error));
         }
         
         function deleteTask(taskId, orderId) {
-            if (!confirm("Are you sure you want to delete this task?")) return;
+          if (!confirm("Are you sure you want to delete this task?")) return;
         
-            fetch("/delete_task", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ task_id: taskId, order_id: orderId })
-            })
+          fetch("/delete_task", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task_id: taskId, order_id: orderId })
+          })
             .then(res => res.json())
             .then(data => {
               if (data.success) {
-                location.reload();
+                // 🧽 Remove task row from DOM
+                const taskRow = document.querySelector(`#details-${orderId} table button[onclick*="deleteTask(${taskId},"]`)?.closest("tr");
+                if (taskRow) taskRow.remove();
+        
+                // ♻️ Recalculate visible groups
+                const groupSet = new Set();
+                const detailRows = document.querySelectorAll(`#details-${orderId} table tr`);
+                detailRows.forEach(row => {
+                  const groupCell = row.querySelector("td:nth-child(2)");
+                  if (groupCell && groupCell.textContent.trim()) {
+                    groupSet.add(groupCell.textContent.trim());
+                  }
+                });
+        
+                // 📝 Update active_groups cell in main row
+                const groupCell = document.querySelector(`tr[data-order-id="${orderId}"] td:nth-child(7)`);
+                if (groupCell) {
+                  groupCell.textContent = [...groupSet].join(", ");
+                }
               } else {
                 alert("Error: " + data.message);
               }
             })
             .catch(err => console.error("Delete error:", err));
-          }
+        }
         
         function deleteOrder(orderId) {
             if (!confirm("Are you sure you want to delete this order? This will remove all its tasks!")) return;
@@ -295,79 +403,89 @@
         }
         
        let currentTaskId = null;
-
+       
         function showTaskHistory(taskId, orderId) {
-            currentTaskId = taskId;
+          const order = orders.find(o => o.id === orderId);
+          if (!order) return;
+          const task = order.sub_tasks.find(t => t.id === taskId);
+          if (!task) return;
         
-            const allOrders = JSON.parse(document.getElementById("orders-data").textContent);
-            const order = allOrders.find(o => o.id === orderId);
-            const task = order?.sub_tasks.find(t => t.id === taskId);
+          const historyContent = document.getElementById("historyContent");
+          historyContent.innerHTML = "";
         
-            const historyContent = document.getElementById("historyContent");
-            historyContent.innerHTML = "";
+          if (task?.history?.length > 0) {
+            const grouped = {};
+            task.history.forEach(entry => {
+              const [date] = entry.timestamp.split(" ");
+              if (!grouped[date]) grouped[date] = [];
+              grouped[date].push(entry);
+            });
         
-            if (task?.history?.length > 0) {
-                const grouped = {};
+            for (const date in grouped) {
+              const dateHeader = document.createElement("li");
+              dateHeader.innerHTML = `<strong>${date}</strong>`;
+              historyContent.appendChild(dateHeader);
         
-                task.history.forEach(entry => {
-                    const [date] = entry.timestamp.split(' ');
-                    if (!grouped[date]) grouped[date] = [];
-                    grouped[date].push(entry);
-                });
+              const entries = grouped[date];
+              for (let i = 0; i < entries.length; i++) {
+                const current = entries[i];
+                const prev = entries[i - 1];
+                const li = document.createElement("li");
         
-                for (const date in grouped) {
-                    const dateHeader = document.createElement("li");
-                    dateHeader.innerHTML = `<strong>${date}</strong>`;
-                    historyContent.appendChild(dateHeader);
+                let text = `${current.timestamp} → ${current.delta >= 0 ? '+' : ''}${current.delta}`;
         
-                    const entries = grouped[date];
-                    for (let i = 0; i < entries.length; i++) {
-                        const current = entries[i];
-                        const prev = entries[i - 1];
-                        const li = document.createElement("li");
-        
-                        let text = `${current.timestamp} → ${current.delta >= 0 ? '+' : ''}${current.delta}`;
-        
-                        if (prev) {
-                            const t1 = new Date(prev.timestamp);
-                            const t2 = new Date(current.timestamp);
-                            const diffMin = Math.round((t2 - t1) / 60000);
-                            const timePerPiece = current.delta !== 0 ? (diffMin / current.delta).toFixed(2) : "-";
-                            text += ` | ${diffMin} mins later | ~${timePerPiece} min/piece`;
-                        }
-        
-                        li.textContent = text;
-                        historyContent.appendChild(li);
-                    }
+                if (prev) {
+                  const t1 = new Date(prev.timestamp);
+                  const t2 = new Date(current.timestamp);
+                  const diffMin = Math.round((t2 - t1) / 60000);
+                  const timePerPiece = current.delta !== 0 ? (diffMin / current.delta).toFixed(2) : "-";
+                  text += ` | ${diffMin} mins later | ~${timePerPiece} min/piece`;
                 }
-            } else {
-                historyContent.innerHTML = "<li>No history</li>";
-            }
         
-            // Add editable note section to modal
-            const noteContainer = document.getElementById("noteEditor");
-            if (noteContainer) {
-                noteContainer.value = task?.note || "";
+                li.textContent = text;
+                historyContent.appendChild(li);
+              }
             }
+          } else {
+            historyContent.innerHTML = "<li>No history</li>";
+          }
         
-            openModal("historyModal");
+          const noteContainer = document.getElementById("noteEditor");
+          if (noteContainer) {
+            noteContainer.dataset.taskId = taskId;
+            noteContainer.dataset.orderId = orderId;
+            noteContainer.value = task?.note || "";
+          }
+        
+          openModal("historyModal");
         }
         
         function saveTaskNote() {
-            const note = document.getElementById("noteEditor").value;
+          const noteEditor = document.getElementById("noteEditor");
+          const note = noteEditor.value;
+          const taskId = parseInt(noteEditor.dataset.taskId);
+          const orderId = parseInt(noteEditor.dataset.orderId);
         
-            fetch("/update_task", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ task_id: currentTaskId, note: note })
+          fetch("/update_note", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              task_id: taskId,
+              order_id: orderId,
+              note: note
             })
+          })
             .then(res => res.json())
             .then(data => {
-                if (!data.success) return alert("Error saving note");
-                alert("Note saved!");
+              if (!data.success) {
+                alert("Failed to save note");
+              } else {
+                const order = orders.find(o => o.id === orderId);
+                const task = order?.sub_tasks.find(t => t.id === taskId);
+                if (task) task.note = note;
+              }
             });
         }
-
         
         let currentSortCol = null;
         let sortAsc = true;
@@ -486,6 +604,166 @@
             });
         }
         
+        function printSummary() {
+          window.print();
+        }
+        
+        function openEditOrder(orderId) {
+          
+          const order = orders.find(o => o.id === orderId);
+          
+        
+          document.getElementById("edit-order-id").value = order.id;
+          document.getElementById("edit-manufacture-code").value = order.manufacture_code;
+          document.getElementById("edit-customer-name").value = order.customer;
+          document.getElementById("edit-product-name").value = order.product;
+          document.getElementById("edit-delivery-date").value = order.delivery_date;
+          document.getElementById("edit-quantity").value = order.quantity;
+        
+          openModal("editOrderModal");
+        }
+        
+        function submitEditOrder() {
+          const data = {
+            order_id: parseInt(document.getElementById("edit-order-id").value),
+            manufacture_code: document.getElementById("edit-manufacture-code").value,
+            customer: document.getElementById("edit-customer-name").value,
+            product: document.getElementById("edit-product-name").value,
+            delivery_date: document.getElementById("edit-delivery-date").value,
+            quantity: parseInt(document.getElementById("edit-quantity").value),
+          };
+        
+          fetch("/update_order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+          })
+            .then(res => res.json())
+            .then(res => {
+              if (res.success) {
+                const row = document.querySelector(`tr[data-order-id='${data.order_id}']`);
+                if (row) {
+                  row.cells[1].textContent = data.delivery_date;
+                  row.cells[2].textContent = data.manufacture_code;
+                  row.cells[3].textContent = data.customer;
+                  row.cells[4].textContent = data.product;
+                  row.cells[5].textContent = data.quantity;
+                }
+        
+                const order = orders.find(o => o.id === data.order_id);
+                if (order) {
+                  order.manufacture_code = data.manufacture_code;
+                  order.customer = data.customer;
+                  order.product = data.product;
+                  order.delivery_date = data.delivery_date;
+                  order.quantity = data.quantity;
+                }
+        
+                closeModal("editOrderModal");
+              } else {
+                alert("Update failed.");
+              }
+            });
+        }        
+        
+        function openEditTask(taskId, orderId) {
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+            const task = order.sub_tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            document.getElementById("edit-task-id").value = task.id;
+            document.getElementById("edit-task-order-id").value = orderId;
+            document.getElementById("edit-station-name").value = task.group;
+            document.getElementById("edit-task-name").value = task.task;
+            document.getElementById("edit-task-quantity").value = task.quantity;
+
+            openModal("editTaskModal");
+        }
+        
+        function submitEditTask() {
+          const data = {
+            task_id: parseInt(document.getElementById("edit-task-id").value),
+            order_id: parseInt(document.getElementById("edit-task-order-id").value),
+            group: document.getElementById("edit-station-name").value,
+            task: document.getElementById("edit-task-name").value,
+            quantity: parseInt(document.getElementById("edit-task-quantity").value),
+          };
+        
+          fetch("/update_task_info", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+          })
+            .then(res => res.json())
+            .then(res => {
+              if (res.success) {
+                const row = document.querySelector(`#details-${data.order_id} table button[onclick*='updateTask(${data.task_id},']`)?.closest("tr");
+                if (row) {
+                  row.children[1].textContent = data.group;
+                  row.children[2].textContent = data.quantity;
+                  row.children[3].textContent = data.task;
+                  document.getElementById(`task-remaining-${data.task_id}`).textContent = data.quantity - parseInt(document.getElementById(`task-completed-${data.task_id}`).value || 0);
+                }              
+                
+                const order = orders.find(o => o.id === data.order_id);
+                if (order) {
+                  const task = order.sub_tasks.find(t => t.id === data.task_id);
+                  if (task) {
+                    task.group = data.group;
+                    task.task = data.task;
+                    task.quantity = data.quantity;
+                  }
+                }
+                
+                const groupCell = document.querySelector(`tr[data-order-id='${data.order_id}'] td:nth-child(7)`);
+                if (groupCell) {
+                  const order = orders.find(o => o.id === data.order_id);
+                  const uniqueGroups = [...new Set(order.sub_tasks.map(t => t.group).filter(Boolean))];
+                  groupCell.textContent = uniqueGroups.join(', ');
+                }
+        
+                closeModal("editTaskModal");
+              } else {
+                alert("Update failed.");
+              }
+            });
+        }
+        
+        function renderTaskRow(task, orderId) {
+          const row = document.createElement("tr");
+        
+          const progressPercent = task.quantity > 0
+            ? Math.round((task.completed / task.quantity) * 100)
+            : 0;
+        
+          row.innerHTML = `
+            <td>
+              <div class="progress-bar" id="task-progress-${task.id}">
+                <div class="progress-fill" style="width: ${progressPercent}%"></div>
+              </div>
+            </td>
+            <td>${task.group}</td>
+            <td>${task.quantity}</td>
+            <td>${task.task}</td>
+            <td><input type="number" id="task-completed-${task.id}" value="${task.completed}"></td>
+            <td id="task-remaining-${task.id}">${task.quantity - task.completed}</td>
+            <td id="task-last-update-${task.id}">
+              ${task.history?.length > 0
+                ? `${task.history.at(-1).timestamp.split(' ')[0]} (+${task.history.at(-1).delta})`
+                : "-"}
+            </td>
+            <td>
+              <button onclick="updateTask(${task.id}, ${orderId})">Update</button>
+              <button onclick="showTaskHistory(${task.id}, ${orderId})">History</button>
+              <button onclick="openEditTask(${task.id}, ${orderId})">Edit</button>
+              <button onclick="deleteTask(${task.id}, ${orderId})" style="background-color: red; color: white;">Delete</button>
+            </td>
+          `;
+        
+          return row;
+        }
+        
         window.addEventListener("DOMContentLoaded", () => {
             const tbody = document.querySelector("#order-table tbody");
             const allRows = Array.from(tbody.rows);
@@ -512,6 +790,7 @@
 
     <button onclick="openModal('addOrderModal')">Add new</button>
     <button onclick="resetSort()">Clear Sort</button>
+    <button onclick="printSummary()">🖨️ Print Summary</button>
 
     <table id="order-table">
         <thead>
@@ -544,6 +823,7 @@
             <td>{{ order.active_groups | join(', ') }}</td>
             <td>
                 <button onclick="toggleDetails({{ order.id }})">Expand</button>
+                <button onclick="openEditOrder({{ order.id }})">Edit</button>
                 <button onclick="deleteOrder({{ order.id }})" style="background-color: red;">Delete Order</button>
             </td>
         </tr>
@@ -580,6 +860,7 @@
                         <td>
                             <button onclick="updateTask({{ task.id }}, {{ order.id }})">Update</button>
                             <button onclick="showTaskHistory({{ task.id }}, {{ order.id }})">History</button>
+                            <button onclick="openEditTask({{ task.id }}, {{ order.id }})">Edit</button>
                             <button onclick="deleteTask({{ task.id }}, {{ order.id }})" style="background-color: red; color: white;">Delete</button>
                         </td>
                     </tr>
@@ -610,6 +891,20 @@
         </form>
     </div>
     
+    <div id="editOrderModal" class="modal">
+      <span class="close-btn" onclick="closeModal('editOrderModal')">&times;</span>
+      <h2>Edit Order</h2>
+      <form onsubmit="event.preventDefault(); submitEditOrder();">
+        <input type="hidden" id="edit-order-id">
+        <label>製令號碼</label><input type="text" id="edit-manufacture-code">
+        <label>專案名稱</label><input type="text" id="edit-customer-name">
+        <label>產品名稱</label><input type="text" id="edit-product-name">
+        <label>交期</label><input type="text" id="edit-delivery-date">
+        <label>數量</label><input type="number" id="edit-quantity">
+        <button type="submit">Save</button>
+      </form>
+    </div>
+    
     <div id="addTaskModal" class="modal">
         <span class="close-btn" onclick="closeModal('addTaskModal')">&times;</span>
         <h2>Add New Task</h2>
@@ -631,23 +926,6 @@
                 <option value="門框組">門框組</option>
                 <option value="自動缐組">自動缐組</option>
             </select>
-            <style>
-            select#station-name {
-                border: 1px solid #ccc;
-                border-radius: 6px;
-                padding: 10px;
-                font-size: 16px;
-                background-color: #fff;
-                width: 100%;
-                box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-            }
-            
-            select#station-name:focus {
-                outline: none;
-                border-color: #007bff;
-                box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
-            }
-            </style>
             <label>工作內容</label>
             <input type="text" id="task-name" required placeholder="工作內容">
             <label>數量</label>
@@ -655,6 +933,35 @@
             <button type="submit">Save</button>
         </form>
     </div>
+    
+    <div id="editTaskModal" class="modal">
+      <span class="close-btn" onclick="closeModal('editTaskModal')">&times;</span>
+      <h2>Edit Task</h2>
+      <form onsubmit="event.preventDefault(); submitEditTask();">
+        <input type="hidden" id="edit-task-id">
+        <input type="hidden" id="edit-task-order-id">
+        <label>組別</label>
+        <select id="edit-station-name" required>
+            <option value="" disabled selected>請選擇組別</option>
+            <option value="物裁組">物裁組</option>
+            <option value="框架組">框架組</option>
+            <option value="膠合組">膠合組</option>
+            <option value="門裁組">門裁組</option>
+            <option value="封邊組">封邊組</option>
+            <option value="整修組">整修組</option>
+            <option value="CNC">CNC</option>
+            <option value="噴漆組">噴漆組</option>
+            <option value="包裝組">包裝組</option>
+            <option value="四面刨組">四面刨組</option>
+            <option value="門框組">門框組</option>
+            <option value="自動缐組">自動缐組</option>
+        </select>
+        <label>工作內容</label><input type="text" id="edit-task-name">
+        <label>數量</label><input type="number" id="edit-task-quantity">
+        <button type="submit">Save</button>
+      </form>
+    </div>
+
     
     <div id="historyModal" class="modal">
         <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
