@@ -82,7 +82,7 @@
         .modal form {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
         }
         
         .modal form label {
@@ -695,7 +695,7 @@
                   order.demand_date = data.demand_date;
                   order.delivery = data.delivery;
                   order.quantity = data.quantity;
-                  order.datecreate = data.datacreate;
+                  order.datecreate = data.datecreate;
                   order.fengbian = data.fengbian;
                   order.wallpaper = data.wallpaper;
                   order.jobdesc = data.jobdesc;
@@ -862,7 +862,13 @@
                 <div class="progress-bar" id="order-progress-{{ order.id }}">
                     <div class="progress-fill" style="width: {{ percent }}%"></div>
                 </div>
-                <span class="print-progress">{{ ((total_completed / total_quantity * 100) | int) }}%</span>
+                <span class="print-progress">
+                    {% if total_quantity > 0 %}
+                        {{ ((total_completed / total_quantity * 100) | int) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </span>
             </td>
             <td>{{ order.demand_date }}</td>
             <td>{{ order.delivery }}</td>
@@ -900,7 +906,13 @@
                             <div class="progress-bar" id="task-progress-{{ task.id }}">
                                 <div class="progress-fill" style="width: {{ (task.completed / task.quantity) * 100 }}%"></div>
                             </div>
-                            <span class="print-progress">{{ ((task.completed / task.quantity * 100) | int) }}%</span>
+                            <span class="print-progress">
+                                {% if total_quantity > 0 %}
+                                    {{ ((task.completed / task.quantity * 100) | int) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </span>
                         </td>
                         <td>{{ task.group }}</td>
                         <td>{{ task.quantity }}</td>

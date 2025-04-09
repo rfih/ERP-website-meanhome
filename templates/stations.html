@@ -402,11 +402,11 @@
       <td>
         <button onclick="updateTask({{ item.task.id }}, {{ item.order.id }})">Update</button>
         <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order.id }})">History</button>
-        <button onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})" style="background:red;">Delete</button>
-        <td class="print-only"></td>
-        <td class="print-only"></td>
-        <td class="print-only"></td>
+        <button onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})" style="background:red;">Delete</button> 
       </td>
+      <td class="print-only"></td>
+      <td class="print-only"></td>
+      <td class="print-only"></td>
     </tr>
     {% endfor %}
   </tbody>
