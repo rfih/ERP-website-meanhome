@@ -152,6 +152,10 @@
           .progress-bar {
             height: 8px;
           }
+          
+          .print-progress {
+            display: inline !important;
+          }
         
           td, th {
             font-size: 12px;
@@ -182,12 +186,17 @@
         
         function submitOrder() {
             let mancode = document.getElementById("manufacture-code").value;
-            let project = document.getElementById("project-name").value;
+            let demand = document.getElementById("demand-date").value;
             let product = document.getElementById("product-name").value;
             let customer = document.getElementById("customer-name").value;
             let quantity = document.getElementById("quantity").value;
+            let delivery = document.getElementById("delivery").value;
+            let datecreate = document.getElementById("datecreate").value;
+            let fengbian = document.getElementById("fengbian").value;
+            let wallpaper = document.getElementById("wallpaper").value;
+            let jobdesc = document.getElementById("jobdesc").value; 
 
-            if (!mancode || !project || !product || !customer || !quantity) {
+            if (!mancode || !demand || !product || !customer || !quantity || !fengbian || !wallpaper || !jobdesc) {
                 alert("All fields are required.");
                 return;
             }
@@ -200,7 +209,12 @@
                     customer: customer,
                     product: product,
                     quantity: parseInt(quantity),
-                    delivery_date: project
+                    demand_date: demand,
+                    delivery: delivery,
+                    datecreate: datecreate,
+                    fengbian: fengbian,
+                    wallpaper: wallpaper,
+                    jobdesc: jobdesc
                 })
             })
             .then(response => response.json())
@@ -243,6 +257,10 @@
             const fill = document.querySelector(`#task-progress-${taskId} .progress-fill`);
             const percent = (data.task.completed / data.task.quantity) * 100;
             if (fill) fill.style.width = `${percent}%`;
+            const progressText = fill?.parentElement?.nextElementSibling;
+            if (progressText && progressText.classList.contains('print-progress')) {
+              progressText.textContent = `${Math.floor(percent)}%`;
+            }
         
             document.getElementById(`task-remaining-${taskId}`).textContent = data.task.quantity - data.task.completed;
         
@@ -273,6 +291,10 @@
             if (orderProgress && totalQuantity > 0) {
               const percent = Math.min(100, (totalCompleted / totalQuantity) * 100);
               orderProgress.style.width = `${percent}%`;
+              const progressText = orderProgress?.parentElement?.nextElementSibling;
+              if (progressText && progressText.classList.contains('print-progress')) {
+                progressText.textContent = `${Math.floor(percent)}%`;
+              }
             }
           })
           .catch(error => {
@@ -617,8 +639,13 @@
           document.getElementById("edit-manufacture-code").value = order.manufacture_code;
           document.getElementById("edit-customer-name").value = order.customer;
           document.getElementById("edit-product-name").value = order.product;
-          document.getElementById("edit-delivery-date").value = order.delivery_date;
+          document.getElementById("edit-demand-date").value = order.demand_date;
+          document.getElementById("edit-delivery-date").value = order.delivery;
           document.getElementById("edit-quantity").value = order.quantity;
+          document.getElementById("edit-datecreate").value = order.datecreate;
+          document.getElementById("edit-fengbian").value = order.fengbian;
+          document.getElementById("edit-wallpaper").value = order.wallpaper;
+          document.getElementById("edit-jobdesc").value = order.jobdesc;
         
           openModal("editOrderModal");
         }
@@ -629,8 +656,13 @@
             manufacture_code: document.getElementById("edit-manufacture-code").value,
             customer: document.getElementById("edit-customer-name").value,
             product: document.getElementById("edit-product-name").value,
-            delivery_date: document.getElementById("edit-delivery-date").value,
+            demand_date: document.getElementById("edit-demand-date").value,
+            delivery: document.getElementById("edit-delivery-date").value,
             quantity: parseInt(document.getElementById("edit-quantity").value),
+            datecreate: document.getElementById("edit-datecreate").value,
+            fengbian: document.getElementById("edit-fengbian").value,
+            wallpaper: document.getElementById("edit-wallpaper").value,
+            jobdesc: document.getElementById("edit-jobdesc").value,
           };
         
           fetch("/update_order", {
@@ -643,11 +675,16 @@
               if (res.success) {
                 const row = document.querySelector(`tr[data-order-id='${data.order_id}']`);
                 if (row) {
-                  row.cells[1].textContent = data.delivery_date;
-                  row.cells[2].textContent = data.manufacture_code;
-                  row.cells[3].textContent = data.customer;
-                  row.cells[4].textContent = data.product;
-                  row.cells[5].textContent = data.quantity;
+                  row.cells[1].textContent = data.demand_date;
+                  row.cells[2].textContent = data.delivery;
+                  row.cells[3].textContent = data.manufacture_code;
+                  row.cells[4].textContent = data.customer;
+                  row.cells[5].textContent = data.product;
+                  row.cells[6].textContent = data.quantity;
+                  row.cells[7].textContent = data.datecreate;
+                  row.cells[8].textContent = data.fengbian;
+                  row.cells[9].textContent = data.wallpaper;
+                  row.cells[10].textContent = data.jobdesc;
                 }
         
                 const order = orders.find(o => o.id === data.order_id);
@@ -655,8 +692,13 @@
                   order.manufacture_code = data.manufacture_code;
                   order.customer = data.customer;
                   order.product = data.product;
-                  order.delivery_date = data.delivery_date;
+                  order.demand_date = data.demand_date;
+                  order.delivery = data.delivery;
                   order.quantity = data.quantity;
+                  order.datecreate = data.datacreate;
+                  order.fengbian = data.fengbian;
+                  order.wallpaper = data.wallpaper;
+                  order.jobdesc = data.jobdesc;
                 }
         
                 closeModal("editOrderModal");
@@ -742,6 +784,7 @@
               <div class="progress-bar" id="task-progress-${task.id}">
                 <div class="progress-fill" style="width: ${progressPercent}%"></div>
               </div>
+              <span class="print-progress">${progressPercent}%</span>
             </td>
             <td>${task.group}</td>
             <td>${task.quantity}</td>
@@ -797,11 +840,16 @@
             <tr>
                 <th onclick="sortTable(0)" data-label="Progress">Progress ↑↓</th>
                 <th onclick="sortTable(1)" data-label="客戶交期">客戶交期 ↑↓</th>
-                <th onclick="sortTable(2)" data-label="製令號碼">製令號碼 ↑↓</th>
-                <th onclick="sortTable(3)" data-label="專案名稱">專案名稱 ↑↓</th>
-                <th onclick="sortTable(4)" data-label="產品名稱 ">產品名稱 ↑↓</th>
-                <th onclick="sortTable(5)" data-label="數量">數量 ↑↓</th>
-                <th onclick="sortTable(6)" data-label="現場組別">現場組別 ↑↓</th>
+                <th onclick="sortTable(2)" data-label="預計可出貨日">預計可出貨日↑↓</th>
+                <th onclick="sortTable(3)" data-label="製令號碼">製令號碼 ↑↓</th>
+                <th onclick="sortTable(4)" data-label="專案名稱">專案名稱 ↑↓</th>
+                <th onclick="sortTable(5)" data-label="產品名稱 ">產品名稱 ↑↓</th>
+                <th onclick="sortTable(6)" data-label="數量">數量 ↑↓</th>
+                <th onclick="sortTable(7)" data-label="派單日">派單日 ↑↓</th>
+                <th onclick="sortTable(8)" data-label="封邊">封邊 ↑↓</th>
+                <th onclick="sortTable(9)" data-label="面飾">面飾 ↑↓</th>
+                <th onclick="sortTable(10)" data-label="作業內容">作業內容 ↑↓</th>
+                <th onclick="sortTable(11)" data-label="現場組別">現場組別 ↑↓</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -814,12 +862,18 @@
                 <div class="progress-bar" id="order-progress-{{ order.id }}">
                     <div class="progress-fill" style="width: {{ percent }}%"></div>
                 </div>
+                <span class="print-progress">{{ ((total_completed / total_quantity * 100) | int) }}%</span>
             </td>
-            <td>{{ order.delivery_date }}</td>
+            <td>{{ order.demand_date }}</td>
+            <td>{{ order.delivery }}</td>
             <td>{{ order.manufacture_code}}</td>
             <td>{{ order.customer }}</td>
             <td>{{ order.product }}</td>
             <td>{{ order.quantity }}</td>
+            <td>{{ order.datecreate }}</td>
+            <td>{{ order.fengbian }}</td>
+            <td>{{ order.wallpaper }}</td>
+            <td>{{ order.jobdesc }}</td>
             <td>{{ order.active_groups | join(', ') }}</td>
             <td>
                 <button onclick="toggleDetails({{ order.id }})">Expand</button>
@@ -846,6 +900,7 @@
                             <div class="progress-bar" id="task-progress-{{ task.id }}">
                                 <div class="progress-fill" style="width: {{ (task.completed / task.quantity) * 100 }}%"></div>
                             </div>
+                            <span class="print-progress">{{ ((task.completed / task.quantity * 100) | int) }}%</span>
                         </td>
                         <td>{{ task.group }}</td>
                         <td>{{ task.quantity }}</td>
@@ -868,7 +923,7 @@
                 </table>
                 <button onclick="openModal('addTaskModal'); document.getElementById('task-order-id').value={{ order.id }}; openModal('addTaskModal');">Add Task</button>
             </td>
-            <tr class="separator-row"><td colspan="8" style="height: 10px; background: #ededf0;"></td></tr>
+            <tr class="separator-row"><td colspan="13" style="height: 10px; background: #ededf0;"></td></tr>
         </tr>
         {% endfor %}
     </table>
@@ -884,9 +939,19 @@
             <label>產品名稱</label>
             <input type="text" id="product-name" required>
             <label>客戶交期</label>
-            <input type="text" id="project-name" required>
+            <input type="text" id="demand-date" required>
+            <label>預計可出貨日</label>
+            <input type="text" id="delivery">
             <label>數量</label>
             <input type="number" id="quantity" required>
+            <label>派單日</label>
+            <input type="text" id="datecreate">
+            <label>封邊</label>
+            <input type="text" id="fengbian" required>
+            <label>面飾</label>
+            <input type="text" id="wallpaper" required>
+            <label>作業內容</label>
+            <input type="text" id="jobdesc" required>
             <button type="submit">Save</button>
         </form>
     </div>
@@ -899,8 +964,13 @@
         <label>製令號碼</label><input type="text" id="edit-manufacture-code">
         <label>專案名稱</label><input type="text" id="edit-customer-name">
         <label>產品名稱</label><input type="text" id="edit-product-name">
-        <label>交期</label><input type="text" id="edit-delivery-date">
+        <label>客戶交期</label><input type="text" id="edit-demand-date">
+        <label>預計可出貨日</label><input type="text" id="edit-delivery-date">
         <label>數量</label><input type="number" id="edit-quantity">
+        <label>派單日</label><input type="text" id="edit-datecreate">
+        <label>封邊</label><input type="text" id="edit-fengbian">
+        <label>面飾</label><input type="text" id="edit-wallpaper">
+        <label>作業內容</label><input type="text" id="edit-jobdesc">
         <button type="submit">Save</button>
       </form>
     </div>

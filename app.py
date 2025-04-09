@@ -7,11 +7,16 @@ app = Flask(__name__)
 orders = [
     {
         "id": 1,
-        "delivery_date": "2025/04/25",
+        "demand_date": "2025/04/25",
+        "delivery": "2025/05/01",
         "manufacture_code": "B25000101",
         "customer": "森華",
         "product": "F60A",
         "quantity": 30,
+        "datecreate": "2025/04/30",
+        "fengbian": "實木封邊",
+        "wallpaper": "美耐板",
+        "jobdesc": "凹槽把手.下降條.磁簧孔.龍吐珠.天地栓",
         "stations": ["框架組", "膠合組"],
         "active_groups": ["框架組", "膠合組"],
         "sub_tasks": [
@@ -43,11 +48,16 @@ orders = [
     },
     {
         "id": 2,
-        "delivery_date": "2025/05/15",
+        "demand_date": "2025/05/15",
+        "delivery": "2025/05/01",
         "manufacture_code": "B25000202",
         "customer": "大陸工程",
         "product": "F30A",
         "quantity": 40,
+        "datecreate": "2025/04/30",
+        "fengbian": "鐵(如)",
+        "wallpaper": "OL8844",
+        "jobdesc": "電子鎖.隱弓.",
         "stations": ["框架組", "膠合組"],
         "active_groups": ["框架組", "膠合組"],
         "sub_tasks": [
@@ -126,11 +136,16 @@ def add_order():
     data = request.json
     new_order = {
         "id": len(orders) + 1,
-        "delivery_date": data["delivery_date"],
+        "demand_date": data["demand_date"],
+        "delivery": data["delivery"],
         "manufacture_code": data["manufacture_code"],
         "customer": data["customer"],
         "product": data["product"],
         "quantity": int(data["quantity"]),
+        "datecreate": data["datecreate"],
+        "fengbian": data["fengbian"],
+        "wallpaper": data["wallpaper"],
+        "jobdesc": data["jobdesc"],
         "active_groups": [],  # No active groups initially
         "sub_tasks": []
     }
@@ -254,7 +269,7 @@ def station_progress():
             if task["group"] == station:
                 filtered.append({
                     "order_id": order["id"],
-                    "delivery_date": order["delivery_date"],
+                    "demand_date": order["demand_date"],
                     "manufacture_code": order["manufacture_code"],
                     "customer": order["customer"],
                     "product": order["product"],
@@ -285,7 +300,7 @@ def update_order():
             order["manufacture_code"] = data["manufacture_code"]
             order["customer"] = data["customer"]
             order["product"] = data["product"]
-            order["delivery_date"] = data["delivery_date"]
+            order["demand_date"] = data["demand_date"]
             order["quantity"] = int(data["quantity"])
             return jsonify({"success": True})
     return jsonify({"success": False, "message": "Order not found"})
