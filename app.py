@@ -186,6 +186,22 @@ def update_order():
         o.updated_at = datetime.utcnow()
         session.commit()
         return jsonify(success=True)
+    
+@app.route("/update_task_info", methods=["POST"])
+def update_task_info():
+    data = request.get_json()
+    task_id = int(data["task_id"])
+    order_id = int(data["order_id"])
+
+    with SessionLocal() as session:
+        t = session.query(Task).filter_by(id=task_id, order_id=order_id).first()
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
+        t.group = data.get("group", t.group)
+        t.task = data.get("task", t.task)
+        t.quantity = int(data.get("quantity", t.quantity or 0))
+        session.commit()
+        return jsonify(success=True)
 
 if __name__ == "__main__":
     app.run(debug=True)

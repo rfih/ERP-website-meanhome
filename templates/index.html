@@ -16,6 +16,7 @@
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000}
     .panel{width:360px;margin:8% auto;background:#fff;border-radius:8px;padding:16px 20px}
     input,select{padding:6px;border:1px solid #ccc;border-radius:4px;width:100%}
+    .btn.red { background: #dc3545; }
   </style>
   <script defer src="/static/main.js"></script>
 </head>
@@ -60,7 +61,10 @@
       <td>{{ o.wallpaper }}</td>
       <td>{{ o.jobdesc }}</td>
       <td id="groups-{{o.id}}">{{ o.active_groups }}</td>
-      <td><button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button></td>
+      <td>
+        <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
+        <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+      </td>
     </tr>
 
     <tbody id="details-{{o.id}}" style="display:none">
@@ -79,7 +83,12 @@
         <td>{{ t.task }}</td>
         <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
         <td>{{ t.remaining }}</td>
-        <td><button class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button></td>
+        <td>
+          <button class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
+          <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
+          <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
+          <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
+        </td>
       </tr>
       {% endfor %}
       <tr><td colspan="7"><button class="btn" onclick="openTaskModal({{o.id}})">+ Add Task</button></td></tr>
@@ -122,5 +131,32 @@
       <div style="margin-top:12px"><button class="btn" onclick="submitTask()">Save</button></div>
     </div>
   </div>
+
+  <!-- Task History Modal -->
+  <div id="modal-history" class="modal" onclick="if(event.target===this) closeModal('modal-history')">
+  <div class="panel" style="max-height:70vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0">Task History</h3>
+      <button class="btn" onclick="closeModal('modal-history')">Close</button>
+    </div>
+    <div id="history-content" style="margin-top:12px">
+      <p>Loading...</p>
+    </div>
+  </div>
+</div>
+
+  <!-- Edit Task Modal -->
+<div id="modal-edit-task" class="modal" onclick="if(event.target===this) closeModal('modal-edit-task')">
+  <div class="panel">
+    <h3>Edit Task</h3>
+    <input type="hidden" id="edit-task-id" />
+    <input type="hidden" id="edit-order-id" />
+    <div style="margin-top:8px"><input id="edit-group" placeholder="組別"></div>
+    <div style="margin-top:8px"><input id="edit-name" placeholder="工作內容"></div>
+    <div style="margin-top:8px"><input id="edit-qty" type="number" placeholder="數量"></div>
+    <div style="margin-top:12px"><button class="btn" onclick="submitEditTask()">Save</button></div>
+  </div>
+</div>
+
 </body>
 </html>
