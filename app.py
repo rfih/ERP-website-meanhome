@@ -1,357 +1,191 @@
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
-import copy
+from db import Base, engine, SessionLocal
+from models import Order, Task, TaskHistory
 
 app = Flask(__name__)
-#mulai
-orders = [
-    {
-        "id": 1,
-        "demand_date": "2025/04/25",
-        "delivery": "2025/05/01",
-        "manufacture_code": "B25000101",
-        "customer": "森華",
-        "product": "F60A",
-        "quantity": 30,
-        "datecreate": "2025/04/30",
-        "fengbian": "實木封邊",
-        "wallpaper": "美耐板",
-        "jobdesc": "凹槽把手.下降條.磁簧孔.龍吐珠.天地栓",
-        "stations": ["框架組", "膠合組"],
-        "active_groups": ["框架組", "膠合組"],
-        "sub_tasks": [
-            {
-                "id": 1,
-                "group": "框架組",
-                "quantity": 15,
-                "task": "釘門檻",
-                "completed": 14,
-                "note": "",
-                "history": [
-                    {"timestamp": "2025/03/25 08:00", "delta": 3},
-                    {"timestamp": "2025/03/26 08:00", "delta": 4}
-                ]
-            },
-            {
-                "id": 2,
-                "group": "膠合組",
-                "quantity": 30,
-                "task": "貼木皮",
-                "completed": 20,
-                "note": "",
-                "history": [
-                    {"timestamp": "2025/03/25 08:00", "delta": 5},
-                    {"timestamp": "2025/03/26 08:00", "delta": 6}
-                ]
-            }
-        ]
-    },
-    {
-        "id": 2,
-        "demand_date": "2025/05/15",
-        "delivery": "2025/05/01",
-        "manufacture_code": "B25000202",
-        "customer": "大陸工程",
-        "product": "F30A",
-        "quantity": 40,
-        "datecreate": "2025/04/30",
-        "fengbian": "鐵(如)",
-        "wallpaper": "OL8844",
-        "jobdesc": "電子鎖.隱弓.",
-        "stations": ["框架組", "膠合組"],
-        "active_groups": ["框架組", "膠合組"],
-        "sub_tasks": [
-            {
-                "id": 3,  # ✅ UNIQUE across all orders
-                "group": "框架組",
-                "quantity": 15,
-                "task": "釘門檻",
-                "completed": 10,
-                "note": "",
-                "history": [
-                    {"timestamp": "2025/03/26 09:00", "delta": 2}
-                ]
-            },
-            {
-                "id": 4,  # ✅ UNIQUE across all orders
-                "group": "膠合組",
-                "quantity": 40,
-                "task": "貼木皮",
-                "completed": 33,
-                "note": "",
-                "history": [
-                    {"timestamp": "2025/03/25 09:00", "delta": 7}
-                ]
-            }
-        ]
-    }
-]
+app.config.from_object("config")
+
+# Create tables on first run (we'll add Alembic later)
+Base.metadata.create_all(bind=engine)
+
+def recalc_active_groups(order):
+    # derive from tasks where remaining > 0
+    groups = []
+    for t in order.tasks:
+        remaining = max(0, (t.quantity or 0) - (t.completed or 0))
+        if remaining > 0 and t.group and t.group not in groups:
+            groups.append(t.group)
+    return groups
+
+def order_progress(order):
+    total_q = sum((t.quantity or 0) for t in order.tasks)
+    done_q = sum((t.completed or 0) for t in order.tasks)
+    return (done_q, total_q)
 
 @app.route("/")
 def home():
-    today_date = datetime.today().strftime("%Y/%m/%d")
-    return render_template("index.html", orders=orders, today_date=today_date)
-
-@app.route("/update_task", methods=["POST"])
-def update_task():
-    data = request.json
-    now = datetime.now().strftime("%Y/%m/%d %H:%M")
-
-    task_id = data["task_id"]
-    order_id = data["order_id"]  # ✅ NEW
-
-    for order in orders:
-        if order["id"] != order_id:  # ✅ Filter by specific order only
-            continue
-        for task in order["sub_tasks"]:
-            if task["id"] == task_id:
-                prev = task["completed"]
-                delta = data["completed"] - prev
-                task["completed"] = data["completed"]
-
-                if "note" in data:
-                    task["note"] = data["note"]
-
-                if "history" not in task:
-                    task["history"] = []
-
-                if delta != 0:
-                    task["history"].append({ "timestamp": now, "delta": delta })
-
-                return jsonify({
-                    "success": True,
-                    "task": {
-                        "id": task["id"],
-                        "completed": task["completed"],
-                        "quantity": task["quantity"],
-                        "timestamp": now,
-                        "delta": delta
-                    }
-                })
-
-    return jsonify({ "success": False, "message": "Task not found" })
+    with SessionLocal() as session:
+        orders = session.query(Order).order_by(Order.id.desc()).all()
+        today = datetime.today().strftime("%Y/%m/%d")
+        # Build a light-weight view model for template simplicity
+        vm = []
+        for o in orders:
+            done_q, total_q = order_progress(o)
+            vm.append({
+                "id": o.id,
+                "manufacture_code": o.manufacture_code or "",
+                "customer": o.customer or "",
+                "product": o.product or "",
+                "demand_date": o.demand_date or "",
+                "delivery": o.delivery or "",
+                "quantity": o.quantity or 0,
+                "datecreate": o.datecreate or "",
+                "fengbian": o.fengbian or "",
+                "wallpaper": o.wallpaper or "",
+                "jobdesc": o.jobdesc or "",
+                "active_groups": ", ".join(recalc_active_groups(o)),
+                "progress": (done_q, total_q),
+                "sub_tasks": [
+                    {
+                        "id": t.id,
+                        "group": t.group or "",
+                        "task": t.task or "",
+                        "quantity": t.quantity or 0,
+                        "completed": t.completed or 0,
+                        "remaining": max(0, (t.quantity or 0) - (t.completed or 0))
+                    } for t in o.tasks
+                ]
+            })
+        return render_template("index.html", orders=vm, today_date=today)
 
 @app.route("/add_order", methods=["POST"])
 def add_order():
-    data = request.json
-    new_order = {
-        "id": len(orders) + 1,
-        "demand_date": data["demand_date"],
-        "delivery": data["delivery"],
-        "manufacture_code": data["manufacture_code"],
-        "customer": data["customer"],
-        "product": data["product"],
-        "quantity": int(data["quantity"]),
-        "datecreate": data["datecreate"],
-        "fengbian": data["fengbian"],
-        "wallpaper": data["wallpaper"],
-        "jobdesc": data["jobdesc"],
-        "active_groups": [],  # No active groups initially
-        "sub_tasks": []
-    }
-    orders.append(new_order)
-    return jsonify({"success": True, "orders": orders})
+    data = request.get_json()
+    with SessionLocal() as session:
+        o = Order(
+            manufacture_code=data.get("manufacture_code"),
+            customer=data.get("customer"),
+            product=data.get("product"),
+            demand_date=data.get("demand_date"),
+            delivery=data.get("delivery"),
+            quantity=int(data.get("quantity", 0)),
+            datecreate=data.get("datecreate"),
+            fengbian=data.get("fengbian"),
+            wallpaper=data.get("wallpaper"),
+            jobdesc=data.get("jobdesc"),
+        )
+        session.add(o)
+        session.commit()
+        return jsonify(success=True, order_id=o.id)
 
 @app.route("/add_task", methods=["POST"])
 def add_task():
-    data = request.json
-
-    # Compute a unique task id across all orders
-    existing_ids = [task["id"] for order in orders for task in order["sub_tasks"]]
-    new_task_id = max(existing_ids, default=0) + 1
-
-    for order in orders:
-        if order["id"] == data["order_id"]:
-            new_task = {
-                "id": new_task_id,  # ✅ Globally unique
-                "group": data["group"],
-                "quantity": data["quantity"],
-                "task": data["task"],
-                "completed": data["completed"],
-                "note": "",
-                "history": []
-            }
-            order["sub_tasks"].append(new_task)
-
-            if data["group"] not in order["active_groups"]:
-                order["active_groups"].append(data["group"])
-            break
-
-    return jsonify({"success": True, "task": new_task, "order_id": data["order_id"]})
-
-@app.route("/delete_task", methods=["POST"])
-def delete_task():
-    data = request.json
-    task_id = data.get("task_id")
-    order_id = data.get("order_id")
-
-    for order in orders:
-        if order["id"] == order_id:
-            order["sub_tasks"] = [t for t in order["sub_tasks"] if t["id"] != task_id]
-            order["active_groups"] = sorted({t["group"] for t in order["sub_tasks"] if t["group"]})
-            break
-
-    return jsonify({"success": True})
-
-@app.route("/delete_order", methods=["POST"])
-def delete_order():
-    data = request.json
-    global orders
-    orders = [order for order in orders if order["id"] != data["order_id"]]
-    return jsonify({"success": True, "message": "Order deleted successfully"})
-
-@app.route("/stations_summary")
-def station_overview():
-    selected_group = request.args.get("group", "物裁組")
-
-    station_summary = {
-        "quantity": 0,
-        "completed": 0
-    }
-
-    for order in orders:
-        for task in order["sub_tasks"]:
-            if task["group"] == selected_group:
-                station_summary["quantity"] += task["quantity"]
-                station_summary["completed"] += task["completed"]
-
-    today_date = datetime.today().strftime("%Y/%m/%d")
-    return render_template(
-        "stations.html",
-        today_date=today_date,
-        selected_group=selected_group,
-        quantity=station_summary["quantity"],
-        completed=station_summary["completed"],
-        station_list=["物裁組", "框架組", "膠合組", "門裁組", "封邊組", "整修組", "CNC", "噴漆組", "包裝組", "四面刨組", "門框組", "自動缐組"]
-    )
-
-@app.route("/stations")
-def stations():
-    station_list = [
-        "物裁組", "框架組", "膠合組", "門裁組", "封邊組", "整修組",
-        "CNC", "噴漆組", "包裝組", "四面刨組", "門框組", "自動缐組"
-    ]
-    selected_group = request.args.get("group", station_list[0])
-
-    filtered_orders = []
-    for order in orders:
-        filtered_sub_tasks = [t for t in order["sub_tasks"] if t["group"] == selected_group]
-        if filtered_sub_tasks:
-            order_copy = copy.deepcopy(order)
-            order_copy["sub_tasks"] = filtered_sub_tasks
-            filtered_orders.append(order_copy)
-            
-    tasks = []
-    for order in filtered_orders:
-        for task in order["sub_tasks"]:
-            tasks.append({ "order": order, "task": task })
-
-    today_date = datetime.today().strftime("%Y/%m/%d")
-    print("Selected group:", selected_group, flush=True)
-    print("Filtered orders:", filtered_orders, flush=True)
-    return render_template("stations.html",
-        orders=filtered_orders,
-        tasks=tasks,
-        station_list=station_list,
-        selected_group=selected_group,
-        today_date=today_date)
-    
-
-@app.route("/station_progress")
-def station_progress():
-    station = request.args.get("station")  # Get selected station
-    today_date = datetime.today().strftime("%Y/%m/%d")
-
-    # Filter tasks by station
-    filtered = []
-    for order in orders:
-        for task in order["sub_tasks"]:
-            if task["group"] == station:
-                filtered.append({
-                    "order_id": order["id"],
-                    "demand_date": order["demand_date"],
-                    "manufacture_code": order["manufacture_code"],
-                    "customer": order["customer"],
-                    "product": order["product"],
-                    "quantity": order["quantity"],
-                    "task": task
-                })
-
-    return render_template("station_progress.html", station=station, tasks=filtered, today_date=today_date)
-
-@app.route("/task_history")
-def task_history():
-    order_id = int(request.args.get("order_id"))
-    task_id = int(request.args.get("task_id"))
-
-    for order in orders:
-        if order["id"] == order_id:
-            for task in order["sub_tasks"]:
-                if task["id"] == task_id:
-                    return jsonify({"history": task.get("history", [])})
-
-    return jsonify({"history": []})
-
-@app.route("/update_order", methods=["POST"])
-def update_order():
-    data = request.json
-    for order in orders:
-        if order["id"] == data["order_id"]:
-            order["manufacture_code"] = data["manufacture_code"]
-            order["customer"] = data["customer"]
-            order["product"] = data["product"]
-            order["demand_date"] = data["demand_date"]
-            order["quantity"] = int(data["quantity"])
-            return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Order not found"})
-
-@app.route("/update_task_info", methods=["POST"])
-def update_task_info():
-    data = request.json
-    for order in orders:
-        if order["id"] == data["order_id"]:
-            for task in order["sub_tasks"]:
-                if task["id"] == data["task_id"]:
-                    task["group"] = data["group"]
-                    task["task"] = data["task"]
-                    task["quantity"] = data["quantity"]
-                    order["active_groups"] = list({t["group"] for t in order["sub_tasks"] if t.get("group")})
-                    return jsonify({"success": True})
-    return jsonify({"success": False, "message": "Task not found"})
-
-def recalculate_active_groups(order):
-    order["active_groups"] = sorted(
-        {task["group"] for task in order["sub_tasks"] if task["group"]}
-    )
+    data = request.get_json()
+    with SessionLocal() as session:
+        order_id = int(data["order_id"])
+        o = session.get(Order, order_id)
+        if not o:
+            return jsonify(success=False, message="Order not found"), 404
+        t = Task(
+            order_id=o.id,
+            group=data.get("group"),
+            task=data.get("task"),
+            quantity=int(data.get("quantity", 0)),
+            completed=int(data.get("completed", 0)),
+            note=data.get("note", ""),
+        )
+        session.add(t)
+        session.commit()
+        return jsonify(success=True, task_id=t.id)
 
 @app.route("/get_task/<int:task_id>")
 def get_task(task_id):
-    for order in orders:
-        for task in order["sub_tasks"]:
-            if task["id"] == task_id:
-                return jsonify({
-                    "task": task,
-                    "order_id": order["id"]
-                })
-    return jsonify({ "error": "not found" }), 404
+    with SessionLocal() as session:
+        t = session.get(Task, task_id)
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
+        return jsonify(success=True, task={
+            "id": t.id, "order_id": t.order_id, "group": t.group or "",
+            "task": t.task or "", "quantity": t.quantity or 0, "completed": t.completed or 0
+        })
 
-@app.route("/update_note", methods=["POST"])
-def update_note():
+@app.route("/update_task", methods=["POST"])
+def update_task():
     data = request.get_json()
-    task_id = data.get("task_id")
-    order_id = data.get("order_id")
-    new_note = data.get("note")
+    order_id = int(data["order_id"])
+    task_id = int(data["task_id"])
+    new_completed = int(data.get("completed", 0))
+    note = data.get("note", "")
+    with SessionLocal() as session:
+        t = session.query(Task).filter_by(id=task_id, order_id=order_id).first()
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
+        prev = t.completed or 0
+        t.completed = max(0, min(new_completed, t.quantity or 0))  # clamp
+        session.add(TaskHistory(task_id=t.id, delta=(t.completed - prev), note=note))
+        session.commit()
+        return jsonify(success=True, completed=t.completed)
 
-    for order in orders:
-        if order["id"] == order_id:
-            for task in order["sub_tasks"]:
-                if task["id"] == task_id:
-                    task["note"] = new_note
-                    return jsonify({"success": True})
+@app.route("/task_history", methods=["GET"])
+def task_history():
+    order_id = int(request.args.get("order_id"))
+    task_id = int(request.args.get("task_id"))
+    with SessionLocal() as session:
+        t = session.query(Task).filter_by(id=task_id, order_id=order_id).first()
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
+        hist = session.query(TaskHistory).filter_by(task_id=task_id).order_by(TaskHistory.timestamp.asc()).all()
+        return jsonify(success=True, history=[
+            {"timestamp": h.timestamp.isoformat(), "delta": h.delta, "note": h.note or ""} for h in hist
+        ])
 
-    return jsonify({"success": False, "message": "Task or order not found"})
+@app.route("/delete_task", methods=["POST"])
+def delete_task():
+    data = request.get_json()
+    order_id = int(data["order_id"])
+    task_id = int(data["task_id"])
+    with SessionLocal() as session:
+        t = session.query(Task).filter_by(id=task_id, order_id=order_id).first()
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
+        session.delete(t)
+        session.commit()
+        return jsonify(success=True)
 
+@app.route("/delete_order", methods=["POST"])
+def delete_order():
+    data = request.get_json()
+    order_id = int(data["order_id"])
+    with SessionLocal() as session:
+        o = session.get(Order, order_id)
+        if not o:
+            return jsonify(success=False, message="Order not found"), 404
+        session.delete(o)
+        session.commit()
+        return jsonify(success=True)
 
+@app.route("/update_order", methods=["POST"])
+def update_order():
+    data = request.get_json()
+    with SessionLocal() as session:
+        o = session.get(Order, int(data["order_id"]))
+        if not o:
+            return jsonify(success=False, message="Order not found"), 404
+        # Save all editable fields
+        o.manufacture_code = data.get("manufacture_code", o.manufacture_code)
+        o.customer = data.get("customer", o.customer)
+        o.product = data.get("product", o.product)
+        o.demand_date = data.get("demand_date", o.demand_date)
+        o.delivery = data.get("delivery", o.delivery)
+        o.quantity = int(data.get("quantity", o.quantity or 0))
+        o.datecreate = data.get("datecreate", o.datecreate)
+        o.fengbian = data.get("fengbian", o.fengbian)
+        o.wallpaper = data.get("wallpaper", o.wallpaper)
+        o.jobdesc = data.get("jobdesc", o.jobdesc)
+        o.updated_at = datetime.utcnow()
+        session.commit()
+        return jsonify(success=True)
 
 if __name__ == "__main__":
     app.run(debug=True)
