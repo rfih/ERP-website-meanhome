@@ -18,6 +18,17 @@ function submitOrder(){
     wallpaper: document.getElementById('m-wallpaper').value.trim(),
     jobdesc: document.getElementById('m-jobdesc').value.trim(),
   };
+  const stationRows = document.querySelectorAll("#station-planner .row");
+  payload.initial_tasks = [];
+
+  for (const row of stationRows) {
+    const sel = row.querySelector(".station-select");
+    const inp = row.querySelector(".task-name-input");
+    if (sel.value && inp.value.trim()) {
+      payload.initial_tasks.push({ group: sel.value, task: inp.value.trim() });
+    }
+  }
+  
   if(!payload.customer || !payload.product || !payload.quantity){
     alert('請填寫 客戶/產品/數量'); return;
   }
@@ -140,4 +151,10 @@ function deleteOrder(orderId) {
     if (j.success) location.reload();
     else alert(j.message || "刪除失敗");
   });
+}
+
+function addPlannedStation() {
+  const container = document.getElementById("station-planner");
+  const tmpl = document.getElementById("station-template");
+  container.appendChild(tmpl.content.cloneNode(true));
 }

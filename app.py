@@ -76,6 +76,18 @@ def add_order():
             jobdesc=data.get("jobdesc"),
         )
         session.add(o)
+        session.flush()  # get o.id before commit
+
+        # Create tasks from planned stations
+        for t in data.get("initial_tasks", []):
+            session.add(Task(
+                order_id=o.id,
+                group=t.get("group"),
+                task=t.get("task"),
+                quantity=o.quantity,
+                completed=0
+            ))
+
         session.commit()
         return jsonify(success=True, order_id=o.id)
 

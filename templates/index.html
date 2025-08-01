@@ -17,6 +17,8 @@
     .panel{width:360px;margin:8% auto;background:#fff;border-radius:8px;padding:16px 20px}
     input,select{padding:6px;border:1px solid #ccc;border-radius:4px;width:100%}
     .btn.red { background: #dc3545; }
+    .btn.red { background: #dc3545; }
+    .btn.gray { background: #6c757d; }
   </style>
   <script defer src="/static/main.js"></script>
 </head>
@@ -112,10 +114,33 @@
       <div style="margin-top:8px"><input id="m-datecreate" placeholder="派單日 YYYY/MM/DD"></div>
       <div style="margin-top:8px"><input id="m-fengbian" placeholder="封邊"></div>
       <div style="margin-top:8px"><input id="m-wallpaper" placeholder="面飾"></div>
-      <div style="margin-top:8px"><input id="m-jobdesc" placeholder="作業內容"></div>
+      <div style="margin-top:8px"><b>計劃流程（初始站）</b></div>
+      <div id="station-planner"></div>
+      <button class="btn gray" onclick="addPlannedStation()">+ 新增站</button>
       <div style="margin-top:12px"><button class="btn" onclick="submitOrder()">Save</button></div>
     </div>
   </div>
+
+<template id="station-template">
+  <div class="row" style="margin-top:6px;display:flex;gap:6px">
+    <select class="station-select" style="flex:1">
+      <option value="">-- 選擇組別 --</option>
+      <option value="原物料裁切組">原物料裁切組</option>
+      <option value="框架組">框架組</option>
+      <option value="膠合組">膠合組</option>
+      <option value="門裁切組">門裁切組</option>
+      <option value="封邊組">封邊組</option>
+      <option value="整修組">整修組</option>
+      <option value="噴漆組">噴漆組</option>
+      <option value="CNC組">CNC組</option>
+      <option value="包裝組">包裝組</option>
+      <option value="自動缐組">自動缐組</option>
+    </select>
+    <input type="text" class="task-name-input" placeholder="工作內容" style="flex:2" />
+    <button class="btn red" onclick="this.parentNode.remove()">X</button>
+  </div>
+</template>
+
 
   <!-- Add Task Modal -->
   <div id="modal-task" class="modal" onclick="if(event.target===this) closeModal('modal-task')">
