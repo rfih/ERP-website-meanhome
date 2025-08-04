@@ -69,35 +69,48 @@
       </td>
     </tr>
 
-    <tbody id="details-{{o.id}}" style="display:none">
-      <tr>
-        <th>Progress</th><th>組別</th><th>數量</th><th>工作內容</th>
-        <th>已完成</th><th>剩下</th><th>Actions</th>
-      </tr>
-      {% for t in o.sub_tasks %}
-      <tr id="task-{{t.id}}">
-        <td>
-          {% set ttot = t.quantity if t.quantity else 1 %}
-          <div class="progress-bar"><div class="progress-fill" style="width: {{ (t.completed/ttot)*100 }}%"></div></div>
-        </td>
-        <td>{{ t.group }}</td>
-        <td>{{ t.quantity }}</td>
-        <td>{{ t.task }}</td>
-        <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
-        <td>{{ t.remaining }}</td>
-        <td>
-          <button class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
-          <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
-          <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
-          <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
-        </td>
-      </tr>
-      {% endfor %}
-      <tr><td colspan="7"><button class="btn" onclick="openTaskModal({{o.id}})">+ Add Task</button></td></tr>
-    </tbody>
+    <tr>
+      <td colspan="13" style="padding:0; border:0">
+        <table style="width:100%; border-collapse:collapse">
+          <tbody id="details-{{ o.id }}" style="display:none">
+            <tr>
+              <th>Progress</th>
+              <th>組別</th>
+              <th>數量</th>
+              <th>工作內容</th>
+              <th>已完成</th>
+              <th>剩下</th>
+              <th>Actions</th>
+            </tr>
+            {% for t in o.sub_tasks %}
+            <tr id="task-{{ t.id }}">
+              <td>
+                {% set ttot = t.quantity if t.quantity else 1 %}
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: {{ (t.completed / ttot) * 100 }}%"></div>
+                </div>
+              </td>
+              <td>{{ t.group }}</td>
+              <td>{{ t.quantity }}</td>
+              <td>{{ t.task }}</td>
+              <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
+              <td>{{ t.remaining }}</td>
+              <td>
+                <button class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
+                <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
+                <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
+                <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
+              </td>
+            </tr>
+            {% endfor %}
+            <tr>
+              <td colspan="7"><button class="btn" onclick="openTaskModal({{ o.id }})">+ Add Task</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
     {% endfor %}
-  </table>
-
   <!-- Add Order Modal -->
   <div id="modal-order" class="modal" onclick="if(event.target===this) closeModal('modal-order')">
     <div class="panel">
@@ -114,6 +127,7 @@
       <div style="margin-top:8px"><input id="m-datecreate" placeholder="派單日 YYYY/MM/DD"></div>
       <div style="margin-top:8px"><input id="m-fengbian" placeholder="封邊"></div>
       <div style="margin-top:8px"><input id="m-wallpaper" placeholder="面飾"></div>
+      <div style="margin-top:8px"><input id="m-jobdesc" type="text" placeholder="備註"></div>
       <div style="margin-top:8px"><b>計劃流程（初始站）</b></div>
       <div id="station-planner"></div>
       <button class="btn gray" onclick="addPlannedStation()">+ 新增站</button>

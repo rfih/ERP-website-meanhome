@@ -17,6 +17,7 @@ function submitOrder(){
     fengbian: document.getElementById('m-fengbian').value.trim(),
     wallpaper: document.getElementById('m-wallpaper').value.trim(),
     jobdesc: document.getElementById('m-jobdesc').value.trim(),
+    initial_tasks: []
   };
   const stationRows = document.querySelectorAll("#station-planner .row");
   payload.initial_tasks = [];
