@@ -2,12 +2,18 @@ from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 from db import Base, engine, SessionLocal
 from models import Order, Task, TaskHistory
+import sqlite3
 
 app = Flask(__name__)
 app.config.from_object("config")
 
 # Create tables on first run (we'll add Alembic later)
 Base.metadata.create_all(bind=engine)
+
+def get_db_connection():
+    conn = sqlite3.connect("database.db", check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def recalc_active_groups(order):
     # derive from tasks where remaining > 0
@@ -139,18 +145,31 @@ def update_task():
         session.commit()
         return jsonify(success=True, completed=t.completed)
 
-@app.route("/task_history", methods=["GET"])
-def task_history():
-    order_id = int(request.args.get("order_id"))
-    task_id = int(request.args.get("task_id"))
-    with SessionLocal() as session:
-        t = session.query(Task).filter_by(id=task_id, order_id=order_id).first()
-        if not t:
-            return jsonify(success=False, message="Task not found"), 404
-        hist = session.query(TaskHistory).filter_by(task_id=task_id).order_by(TaskHistory.timestamp.asc()).all()
-        return jsonify(success=True, history=[
-            {"timestamp": h.timestamp.isoformat(), "delta": h.delta, "note": h.note or ""} for h in hist
-        ])
+@app.route("/task-history/<int:task_id>")
+def task_history(task_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, completed, timestamp, start_time, stop_time, duration_minutes 
+        FROM task_history 
+        WHERE task_id = ? 
+        ORDER BY timestamp DESC
+    """, (task_id,))
+    history = cur.fetchall()
+    conn.close()
+
+    history_data = []
+    for row in history:
+        history_data.append({
+            "id": row["id"],
+            "completed": row["completed"],
+            "timestamp": row["timestamp"],
+            "start_time": row["start_time"],
+            "stop_time": row["stop_time"],
+            "duration_minutes": row["duration_minutes"]
+        })
+    return jsonify(history_data)
+
 
 @app.route("/delete_task", methods=["POST"])
 def delete_task():
@@ -214,6 +233,37 @@ def update_task_info():
         t.quantity = int(data.get("quantity", t.quantity or 0))
         session.commit()
         return jsonify(success=True)
+    
+
+
+@app.route("/update_task_timer", methods=["POST"])
+def update_task_timer():
+    data = request.get_json()
+    task_id = data["task_id"]
+    action = data["action"]  # "start" or "stop"
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if action == "start":
+        cur.execute("UPDATE sub_tasks SET start_time = datetime('now') WHERE id = ?", (task_id,))
+        cur.execute("""INSERT INTO task_history (task_id, timestamp, note) VALUES (?, datetime('now'), ?)""", (task_id, 'Start'))
+    elif action == "stop":
+        cur.execute("""
+            UPDATE sub_tasks
+            SET stop_time = datetime('now'),
+                duration_minutes = CAST((strftime('%s', datetime('now')) - strftime('%s', start_time)) / 60 AS INTEGER)
+            WHERE id = ?
+        """, (task_id,))
+        cur.execute("INSERT INTO task_history (task_id, timestamp, note) VALUES (?, datetime('now'), ?)", 
+                    (task_id, 'Stop'))
+
+    conn.commit()
+    conn.close()
+    return jsonify(success=True)
+
+with open("schema.sql", "r", encoding="utf-8") as f:
+    schema = f.read()
 
 if __name__ == "__main__":
     app.run(debug=True)

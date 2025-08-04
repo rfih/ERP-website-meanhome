@@ -59,37 +59,39 @@ function updateTask(taskId, orderId){
 }
 
 function showHistory(taskId, orderId) {
-  openModal('modal-history');
-  const box = document.getElementById('history-content');
-  box.innerHTML = '<p>Loading...</p>';
+  openModal("modal-history");
+  const box = document.getElementById("history-content");
+  box.innerHTML = "<p>Loading...</p>";
 
-  fetch(`/task_history?order_id=${orderId}&task_id=${taskId}`)
+  fetch(`/task-history/${taskId}`)
     .then(r => r.json())
-    .then(j => {
-      if (!j.success) {
-        box.innerHTML = '<p>Error loading history.</p>';
-        return;
-      }
-      if (j.history.length === 0) {
-        box.innerHTML = '<p>No updates recorded yet.</p>';
+    .then(data => {
+      console.log("Fetched history:", data);
+
+      if (!data || data.length === 0) {
+        box.innerHTML = "<p>No updates recorded yet.</p>";
         return;
       }
 
-      let html = '<table style="width:100%;border-collapse:collapse;margin-top:8px">';
-      html += '<tr><th style="text-align:left;padding:4px">Time</th><th style="text-align:right">Change</th><th style="text-align:left">Note</th></tr>';
+      data.forEach(item => {
+        html += `
+          <div style="padding:6px; border-bottom:1px solid #ccc">
+            ${item.note ? '動作: ' + item.note + '<br>' : ''}
+            完成數量: ${item.completed} <br>
+            記錄時間: ${item.timestamp} <br>
+            開始時間: ${item.start_time || '-'} <br>
+            結束時間: ${item.stop_time || '-'} <br>
+            所需時間: ${item.duration_minutes ? item.duration_minutes + ' 分鐘' : '-'}
+          </div>
+        `;
+      });
 
-      for (const h of j.history) {
-        const date = new Date(h.timestamp).toLocaleString();
-        const delta = h.delta > 0 ? `+${h.delta}` : `${h.delta}`;
-        const note = h.note || '';
-        html += `<tr>
-                  <td style="padding:4px">${date}</td>
-                  <td style="text-align:right">${delta}</td>
-                  <td>${note}</td>
-                 </tr>`;
-      }
-      html += '</table>';
+
       box.innerHTML = html;
+    })
+    .catch(err => {
+      console.error("History fetch failed:", err);
+      box.innerHTML = "<p>Error loading history.</p>";
     });
 }
 
@@ -159,3 +161,41 @@ function addPlannedStation() {
   const tmpl = document.getElementById("station-template");
   container.appendChild(tmpl.content.cloneNode(true));
 }
+
+function startTask(taskId) {
+  fetch('/update_task_timer', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ task_id: taskId, action: "start" })
+  }).then(r => r.json()).then(j => {
+    if (j.success) location.reload();
+    else alert("Start failed");
+  });
+}
+
+function stopTask(taskId) {
+  fetch('/update_task_timer', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ task_id: taskId, action: "stop" })
+  }).then(r => r.json()).then(j => {
+    if (j.success) location.reload();
+    else alert("Stop failed");
+  });
+}
+
+async function updateAndLoadHistory(taskId) {
+  await fetch(`/update_task_timer`, { method: 'POST' });
+
+  setTimeout(() => {
+    fetch(`/task-history/${taskId}`)
+      .then(r => r.json())
+      .then(data => {
+        console.log("History data:", data);
+        // you can call showHistory() or update DOM here
+      });
+  }, 300);
+}
+
+// call it when needed
+updateAndLoadHistory(4);
