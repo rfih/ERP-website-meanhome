@@ -25,8 +25,13 @@ function submitOrder(){
   for (const row of stationRows) {
     const sel = row.querySelector(".station-select");
     const inp = row.querySelector(".task-name-input");
-    if (sel.value && inp.value.trim()) {
-      payload.initial_tasks.push({ group: sel.value, task: inp.value.trim() });
+    const inpCustom = row.querySelector(".custom-station-input");
+    const groupVal = (sel.value === "__custom__")
+      ? (inpCustom.value || "").trim()
+      : sel.value;
+    const taskVal = (inp.value || "").trim();
+    if (groupVal && taskVal) {
+      payload.initial_tasks.push({ group: groupVal, task: taskVal });;
     }
   }
   
@@ -34,7 +39,7 @@ function submitOrder(){
     alert('請填寫 客戶/產品/數量'); return;
   }
   fetch('/add_order',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
-    .then(r=>r.json()).then(j=>{ if(j.success){ closeModal('modal-order'); location.reload(); } else alert(j.message||'新增失敗'); });
+    .then(r=>r.json()).then(j=>{ if(j.success){ closeModal('modal-order'); } else alert(j.message||'新增失敗'); });
 }
 
 function openTaskModal(orderId){ document.getElementById('t-order-id').value = orderId; openModal('modal-task'); }
@@ -49,30 +54,63 @@ function submitTask(){
   };
   if(!payload.group || !payload.task || !payload.quantity){ alert('請填寫完整資料'); return; }
   fetch('/add_task',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
-    .then(r=>r.json()).then(j=>{ if(j.success){ closeModal('modal-task'); location.reload(); } else alert(j.message||'新增失敗'); });
+    .then(r=>r.json()).then(j=>{ if(j.success){ closeModal('modal-task'); } else alert(j.message||'新增失敗'); });
 }
 
 function updateTask(taskId, orderId){
-  const input = document.getElementById('done-'+taskId);
-  const raw   = parseInt((input && input.value) || '0', 10);
+  const val = parseInt(document.getElementById('done-'+taskId).value || '0', 10);
 
   fetch('/update_task', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ task_id: taskId, order_id: orderId, completed: raw })
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ task_id: taskId, order_id: orderId, completed: val })
   })
-  .then(r=>r.json())
-  .then(j=>{
-    if(j.success){
-      // server returns the clamped completed value
-      updateTaskRowUI(taskId, j.completed);
-      recalcOrderProgress(orderId);
-      toast('更新完成');
-    }else{
-      alert(j.message || '更新失敗');
-    }
+  .then(r => r.json())
+  .then(j => {
+    if (!j.success) throw 0;
+
+    const row = document.getElementById('task-'+taskId);
+    if (!row) return;
+
+    // task cells: [0]=progress, [1]=組別, [2]=數量, [3]=工作內容, [4]=已完成(input), [5]=剩下
+    const qty = parseInt(row.children[2].textContent || '0', 10);
+    const completed = j.completed || 0;
+    const remaining = Math.max(0, qty - completed);
+
+    // update input + remaining cell
+    const input = document.getElementById('done-'+taskId);
+    if (input) input.value = completed;
+    row.children[5].textContent = remaining;
+
+    // update task progress bar width
+    const fill = row.querySelector('.progress-fill');
+    const pct = (qty ? (completed / qty) * 100 : 0);
+    if (fill) fill.style.width = pct + '%';
+
+    // update the order-level bar
+    updateOrderProgress(orderId);
+
+    toast('已更新');
   })
-  .catch(()=> alert('更新失敗'));
+  .catch(() => alert('更新失敗'));
+}
+
+function updateOrderProgress(orderId){
+  // find all task rows inside this order’s details block and sum totals
+  const tbody = document.getElementById('details-'+orderId);
+  if (!tbody) return;
+
+  let done = 0, total = 0;
+  tbody.querySelectorAll('tr[id^="task-"]').forEach(tr => {
+    const qty = parseInt(tr.children[2].textContent || '0', 10);
+    const comp = parseInt(tr.querySelector('input[type="number"]')?.value || '0', 10);
+    total += qty;
+    done  += comp;
+  });
+
+  // top row bar: #order-{orderId} .progress-fill
+  const bar = document.querySelector(`#order-${orderId} .progress-fill`);
+  if (bar) bar.style.width = (total ? (done/total)*100 : 0) + '%';
 }
 
 function fmt(dt){ return dt ? new Date(dt).toLocaleString() : '-' }
@@ -169,7 +207,7 @@ function deleteTask(taskId, orderId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ task_id: taskId, order_id: orderId })
   }).then(r => r.json()).then(j => {
-    if (j.success) location.reload();
+    if (j.success);
     else alert(j.message || "刪除失敗");
   });
 }
@@ -182,7 +220,7 @@ function deleteOrder(orderId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ order_id: orderId })
   }).then(r => r.json()).then(j => {
-    if (j.success) location.reload();
+    if (j.success);
     else alert(j.message || "刪除失敗");
   });
 }
@@ -190,7 +228,23 @@ function deleteOrder(orderId) {
 function addPlannedStation() {
   const container = document.getElementById("station-planner");
   const tmpl = document.getElementById("station-template");
-  container.appendChild(tmpl.content.cloneNode(true));
+  const frag = tmpl.content.cloneNode(true);
+
+  // wire up the new row’s custom toggle
+  const row = frag.querySelector('.row');
+  const sel = row.querySelector('.station-select');
+  const custom = row.querySelector('.custom-station-input');
+  sel.addEventListener('change', () => {
+    if (sel.value === '__custom__') {
+      custom.style.display = '';
+      custom.focus();
+    } else {
+      custom.style.display = 'none';
+      custom.value = '';
+    }
+  });
+
+  container.appendChild(frag);
 }
 
 // ---- helpers -------------------------------------------------
@@ -207,30 +261,30 @@ function toast(msg){
 function setRunningUI(taskId, running){
   const row = document.getElementById('task-'+taskId);
   if (!row) return;
+
+  // toggle buttons
   const startBtn = row.querySelector('button[onclick^="startTask"]');
   const stopBtn  = row.querySelector('button[onclick^="stopTask"]');
-
   if (startBtn) startBtn.disabled = running;
   if (stopBtn)  stopBtn.disabled  = !running;
 
+  // animate the per-task bar
+  const fill = row.querySelector('.progress-fill');
+  if (fill) fill.classList.toggle('running', running);
+
+  // optional: status text if you added it
+  const status = row.querySelector('.task-status');
+  if (status){
+    status.classList.toggle('running', running);
+    status.innerHTML = running
+      ? '<span class="dot"></span><span>Running</span>'
+      : '<span class="dot"></span><span>Idle</span>';
+  }
+
   // optional: row highlight
   row.classList.toggle('is-running', running);
-
-  // optional: little badge near the task name
-  let badge = row.querySelector('.task-running-badge');
-  if (!badge) {
-    const nameCell = row.querySelector('.name') || row.children[3];
-    if (nameCell) {
-      badge = document.createElement('span');
-      badge.className = 'task-running-badge';
-      badge.style.cssText = 'margin-left:6px;padding:2px 6px;border-radius:10px;background:#ffc107;color:#000;font-size:12px;';
-      nameCell.appendChild(badge);
-    }
-  }
-  if (badge) badge.textContent = running ? 'RUNNING' : '';
 }
 
-// ---- no-reload start/stop -----------------------------------
 function startTask(taskId){
   fetch('/update_task_timer', {
     method: 'POST',
@@ -239,11 +293,10 @@ function startTask(taskId){
   })
   .then(r => r.json())
   .then(j => {
-    if (!j.success) throw new Error('start failed');
-    setRunningUI(taskId, true);
-    toast('已開始');
+    if (!j.success) throw new Error(j.message || 'start failed');
+    setRunningUI(taskId, true); toast('已開始'); 
   })
-  .catch(() => alert('Start failed'));
+  .catch(err => { console.error(err); alert('Start failed'); });
 }
 
 function stopTask(taskId){
@@ -254,12 +307,12 @@ function stopTask(taskId){
   })
   .then(r => r.json())
   .then(j => {
-    if (!j.success) throw new Error('stop failed');
-    setRunningUI(taskId, false);
-    toast('已停止');
+    if (!j.success) throw new Error(j.message || 'stop failed');
+    setRunningUI(taskId, false); toast('已停止');
   })
-  .catch(() => alert('Stop failed'));
+  .catch(err => { console.error(err); alert('Stop failed'); });
 }
+
 
 function toLocal(s) {
   if (!s) return '-';
