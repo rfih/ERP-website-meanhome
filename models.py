@@ -1,42 +1,78 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
+# models.py
 from datetime import datetime
-from db import Base
+from sqlalchemy import (
+    Column, Integer, String, Text, DateTime, ForeignKey
+)
+from sqlalchemy.orm import relationship
+from db import Base  # Base, engine, SessionLocal live in db.py
 
+
+# Orders
 class Order(Base):
     __tablename__ = "orders"
-    id = Column(Integer, primary_key=True)
-    manufacture_code = Column(String(50))
-    customer = Column(String(100))
-    product = Column(String(100))
-    demand_date = Column(String(10))
-    delivery = Column(String(10))
-    datecreate = Column(String(10))
-    quantity = Column(Integer)
-    fengbian = Column(String(100))
-    wallpaper = Column(String(100))
-    jobdesc = Column(String(255))
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Your business fields (keep them as TEXT/STRING to match existing DB)
+    manufacture_code = Column(String)
+    customer        = Column(String)
+    product         = Column(String)
+    demand_date     = Column(String)   # stored as text like "YYYY/MM/DD"
+    delivery        = Column(String)   # stored as text
+    quantity        = Column(Integer, default=0)
+    datecreate      = Column(String)   # stored as text
+    fengbian        = Column(String)
+    wallpaper       = Column(String)
+    jobdesc         = Column(Text)
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime)
+
+    # relationships
     tasks = relationship("Task", back_populates="order", cascade="all, delete-orphan")
 
-class Task(Base):
-    __tablename__ = "tasks"
-    id = Column(Integer, primary_key=True)
-    order_id = Column(Integer, ForeignKey("orders.id"))
-    group = Column(String(50))
-    task = Column(String(100))
-    quantity = Column(Integer)
-    completed = Column(Integer, default=0)
-    note = Column(Text)
-    order = relationship("Order", back_populates="tasks")
-    history = relationship("TaskHistory", back_populates="task", cascade="all, delete-orphan")
 
+# Tasks (mapped to existing **sub_tasks** table)
+class Task(Base):
+    __tablename__ = "sub_tasks"
+    __table_args__ = {'sqlite_autoincrement': True}
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    # the column is literally named "group" in SQLite
+    group = Column("group", String, nullable=True)
+    task  = Column(String, nullable=True)
+
+    quantity = Column(Integer, nullable=True)
+    completed = Column(Integer, nullable=True, default=0)
+
+    # timing
+    start_time = Column(DateTime)      # may be NULL in DB
+    stop_time  = Column(DateTime)
+    duration_minutes = Column(Integer)
+
+    # relationships
+    order    = relationship("Order", back_populates="tasks")
+    history  = relationship("TaskHistory", back_populates="task", cascade="all, delete-orphan")
+
+
+# Task history (mapped to existing **task_history** table)
 class TaskHistory(Base):
     __tablename__ = "task_history"
-    id = Column(Integer, primary_key=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"))
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    delta = Column(Integer)
-    note = Column(Text)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    task_id = Column(Integer, ForeignKey("sub_tasks.id"), nullable=False)
+
+    # quantities
+    completed = Column(Integer)   # present after your migration
+    delta     = Column(Integer)   # present after your migration
+
+    # audit / timing
+    note       = Column(String)   # e.g. "start", "stop"
+    timestamp  = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime)
+    stop_time  = Column(DateTime)
+    duration_minutes = Column(Integer)
+
     task = relationship("Task", back_populates="history")

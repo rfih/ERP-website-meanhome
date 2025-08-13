@@ -13,12 +13,65 @@
     .progress-fill{height:100%;background:#28a745;transition:width .3s}
     .btn{padding:10px 12px;border:0;border-radius:4px;color:#fff;background:#007bff;cursor:pointer}
     .btn.green{background:#28a745}
-    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000}
-    .panel{width:360px;margin:8% auto;background:#fff;border-radius:8px;padding:16px 20px}
-    input,select{height:12px;padding:10px 10px;font-size: 12px;border:1px solid #ccc;border-radius:4px;width:100%}
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;overflow:auto}
+    .panel{width:520px;margin:8% auto;background:#fff;border-radius:8px;padding:8px 10px;overflow:auto}
+    input,select{height:auto;padding:10px 0px;font-size: 12px;border:1px solid #ccc;border-radius:4px;width:100%}
     .btn.red { background: #dc3545; }
     .btn.red { background: #dc3545; }
     .btn.gray { background: #6c757d; }
+    tr.is-running { outline: 2px solid #ffc107; outline-offset: -2px; }
+    #station-planner .row{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-top:12px;
+    }
+
+    /* make the dropdown roomy */
+    #station-planner .station-select{
+      flex:0 0 220px;     /* fixed, comfortable width */
+      min-width:180px;
+      height: auto;
+    }
+
+    /* let the text input take the rest */
+    #station-planner .task-name-input{
+      flex:1 1 auto;
+    }
+
+    /* keep the delete button compact */
+    #station-planner .btn.red{
+      flex:0 0 44px;
+    }
+    .task-status{margin-top:6px;display:flex;align-items:center;gap:6px;justify-content:center;font-size:12px;color:#6c757d}
+    .task-status .dot{width:8px;height:8px;border-radius:50%;background:#adb5bd}
+    .task-status.running{color:#28a745;font-weight:600}
+    .task-status.running .dot{background:#28a745;box-shadow:0 0 0 0 rgba(40,167,69,.4);animation:pulse 1.4s infinite}
+    @keyframes pulse{
+      0%{box-shadow:0 0 0 0 rgba(40,167,69,.45)}
+      70%{box-shadow:0 0 0 8px rgba(40,167,69,0)}
+      100%{box-shadow:0 0 0 0 rgba(40,167,69,0)}
+    }
+    /* animated stripes when a task is running */
+    .progress-fill.running{
+      position: relative;
+      background-image: linear-gradient(
+        45deg,
+        rgba(255,255,255,.25) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255,255,255,.25) 50%,
+        rgba(255,255,255,.25) 75%,
+        transparent 75%,
+        transparent
+      );
+      background-size: 16px 16px;
+      animation: prog-stripes 1s linear infinite;
+    }
+    @keyframes prog-stripes{ from{background-position:0 0} to{background-position:16px 0} }
+
+    /* optional: highlight the running row */
+    tr.is-running { outline: 2px solid #ffc107; outline-offset: -2px; }
   </style>
   <script defer src="/static/main.js"></script>
 </head>
@@ -84,24 +137,36 @@
             </tr>
             {% for t in o.sub_tasks %}
             <tr id="task-{{ t.id }}">
-              <td>
-                {% set ttot = t.quantity if t.quantity else 1 %}
-                <div class="progress-bar">
-                  <div class="progress-fill" style="width: {{ (t.completed / ttot) * 100 }}%"></div>
-                </div>
-              </td>
+              <tr id="task-{{ t.id }}" data-qty="{{ t.quantity }}" data-order="{{ o.id }}"></tr>
+                <td>
+                  {% set ttot = t.quantity if t.quantity else 1 %}
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ (t.completed / ttot) * 100 }}%"></div>
+                  </div>
+                  <div class="task-status {{ 'running' if t.running else '' }}">
+                    <span class="dot"></span>
+                    <span>
+                      {{ 'Running' if t.running else 'Idle' }}
+                      {% if t.running and t.started_at %}
+                        <span style="opacity:.7">• since {{ t.started_at[:19].replace('T',' ') }}</span>
+                      {% endif %}
+                    </span>
+                  </div>
+                </td>
               <td>{{ t.group }}</td>
+              <td class="qty">{{ t.quantity }}</td>
+              <td class="name">{{ t.task }}</td>
               <td>{{ t.quantity }}</td>
               <td>{{ t.task }}</td>
               <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
-              <td>{{ t.remaining }}</td>
+              <td class="remaining">{{ t.remaining }}</td>
               <td>
-                <button class="btn gray" onclick="startTask({{ t.id }})">Start</button>
+                <button class="btn gray" onclick="startTask({{ t.id }})" {{ 'disabled' if t.running else '' }}>Start</button>
                 <button class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
                 <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
                 <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
                 <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
-                <button class="btn gray" onclick="stopTask({{ t.id }})">Stop</button>
+                <button class="btn gray" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
               </td>
             </tr>
             {% endfor %}
@@ -131,15 +196,15 @@
       <div style="margin-top:8px"><input id="m-wallpaper" placeholder="面飾"></div>
       <div style="margin-top:8px"><input id="m-jobdesc" type="text" placeholder="備註"></div>
       <div style="margin-top:8px"><b>計劃流程（初始站）</b></div>
-      <div id="station-planner"></div>
+      <div class="station-planner" id="station-planner"></div>
       <button class="btn gray" onclick="addPlannedStation()">+ 新增站</button>
       <div style="margin-top:12px"><button class="btn" onclick="submitOrder()">Save</button></div>
     </div>
   </div>
 
 <template id="station-template">
-  <div class="row" style="margin-top:6px;display:flex;gap:6px">
-    <select class="station-select" style="flex:1">
+  <div class="row">
+    <select class="station-select">
       <option value="">-- 選擇組別 --</option>
       <option value="原物料裁切組">原物料裁切組</option>
       <option value="框架組">框架組</option>
@@ -152,7 +217,7 @@
       <option value="包裝組">包裝組</option>
       <option value="自動缐組">自動缐組</option>
     </select>
-    <input type="text" class="task-name-input" placeholder="工作內容" style="flex:2" />
+    <input type="text" class="task-name-input" placeholder="工作內容"/>
     <button class="btn red" onclick="this.parentNode.remove()">X</button>
   </div>
 </template>

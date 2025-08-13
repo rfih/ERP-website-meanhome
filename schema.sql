@@ -19,9 +19,11 @@ CREATE TABLE IF NOT EXISTS sub_tasks (
   FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
 );
 
+DROP TABLE IF EXISTS task_history;
 CREATE TABLE task_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id INTEGER,
+    task_id INTEGER NOT NULL,
+    note TEXT,
     completed INTEGER,
     timestamp TEXT,
     start_time TEXT,
@@ -32,11 +34,16 @@ CREATE TABLE task_history (
 CREATE TABLE IF NOT EXISTS task_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_id INTEGER NOT NULL,
-    completed INTEGER NOT NULL,
+    note TEXT,
+    completed INTEGER,
     timestamp TEXT,
     start_time TEXT,
     stop_time TEXT,
     duration_minutes INTEGER,
-    note TEXT,
     FOREIGN KEY(task_id) REFERENCES sub_tasks(id)
 );
+
+ALTER TABLE task_history ADD COLUMN completed INTEGER;
+ALTER TABLE task_history ADD COLUMN start_time TEXT;
+ALTER TABLE task_history ADD COLUMN stop_time TEXT;
+ALTER TABLE task_history ADD COLUMN duration_minutes INTEGER;

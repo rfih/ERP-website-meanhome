@@ -1,8 +1,12 @@
-from flask import Flask, render_template, request, jsonify
-from datetime import datetime
+from flask import Flask, render_template, request, jsonify, session
+from datetime import datetime, timezone
 from db import Base, engine, SessionLocal
 from models import Order, Task, TaskHistory
-import sqlite3
+
+def utcnow():
+    return datetime.now(timezone.utc)
+
+task_timers = {}
 
 app = Flask(__name__)
 app.config.from_object("config")
@@ -10,10 +14,26 @@ app.config.from_object("config")
 # Create tables on first run (we'll add Alembic later)
 Base.metadata.create_all(bind=engine)
 
-def get_db_connection():
-    conn = sqlite3.connect("database.db", check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+def as_utc(dt):
+    """Return a timezone-aware UTC datetime from DB value (datetime or str)."""
+    if not dt:
+        return None
+    if isinstance(dt, str):
+        s = dt.replace('Z', '+00:00')           # accept Z suffix
+        try:
+            dt = datetime.fromisoformat(s)
+        except Exception:
+            # last-resort parse; treat as UTC
+            try:
+                dt = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S.%f")
+            except Exception:
+                dt = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+            dt = dt.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt
 
 def recalc_active_groups(order):
     # derive from tasks where remaining > 0
@@ -59,7 +79,9 @@ def home():
                         "task": t.task or "",
                         "quantity": t.quantity or 0,
                         "completed": t.completed or 0,
-                        "remaining": max(0, (t.quantity or 0) - (t.completed or 0))
+                        "remaining": max(0, (t.quantity or 0) - (t.completed or 0)),
+                        "running": bool(getattr(t, "start_time", None) and not getattr(t, "stop_time", None)),
+                        "started_at": (t.start_time.isoformat() if getattr(t, "start_time", None) else None),
                     } for t in o.tasks
                 ]
             })
@@ -105,13 +127,13 @@ def add_task():
         o = session.get(Order, order_id)
         if not o:
             return jsonify(success=False, message="Order not found"), 404
+
         t = Task(
             order_id=o.id,
             group=data.get("group"),
             task=data.get("task"),
             quantity=int(data.get("quantity", 0)),
             completed=int(data.get("completed", 0)),
-            note=data.get("note", ""),
         )
         session.add(t)
         session.commit()
@@ -141,35 +163,65 @@ def update_task():
             return jsonify(success=False, message="Task not found"), 404
         prev = t.completed or 0
         t.completed = max(0, min(new_completed, t.quantity or 0))  # clamp
-        session.add(TaskHistory(task_id=t.id, delta=(t.completed - prev), note=note))
+        label = note or ("update" if t.completed != prev else "noop")
+        session.add(TaskHistory(
+            task_id=t.id,
+            timestamp=datetime.now(timezone.utc),
+            delta=(t.completed - prev),
+            note=label,
+            completed=t.completed
+        ))
         session.commit()
         return jsonify(success=True, completed=t.completed)
+    
+def iso(dt):
+    if not dt:
+        return None
+    if isinstance(dt, str):
+        # 'YYYY-MM-DD HH:MM:SS(.ffffff)?(+00:00)?' -> ISO + Z
+        s = dt.strip().replace(' ', 'T')
+        if s.endswith('+00:00'):
+            s = s[:-6] + 'Z'
+        elif s[-1].isdigit():  # no tz info, assume UTC
+            s += 'Z'
+        return s
+    # datetime
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
 
 @app.route("/task-history/<int:task_id>")
 def task_history(task_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT id, completed, timestamp, start_time, stop_time, duration_minutes 
-        FROM task_history 
-        WHERE task_id = ? 
-        ORDER BY timestamp DESC
-    """, (task_id,))
-    history = cur.fetchall()
-    conn.close()
+    def iso(dt):
+        if not dt:
+            return None
+        # If it's naive, treat as UTC
+        if isinstance(dt, str):
+            # already text, best effort pass-through
+            return dt
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat().replace("+00:00", "Z")
 
-    history_data = []
-    for row in history:
-        history_data.append({
-            "id": row["id"],
-            "completed": row["completed"],
-            "timestamp": row["timestamp"],
-            "start_time": row["start_time"],
-            "stop_time": row["stop_time"],
-            "duration_minutes": row["duration_minutes"]
-        })
-    return jsonify(history_data)
+    with SessionLocal() as session:
+        rows = (session.query(TaskHistory)
+                .filter(TaskHistory.task_id == task_id)
+                .order_by(TaskHistory.id.desc())  # stable, monotonic
+                .all())
 
+        out = []
+        for h in rows:
+            out.append({
+                "id": h.id,
+                "completed": h.completed,
+                "delta": getattr(h, "delta", None),
+                "note": h.note,
+                "timestamp": iso(h.timestamp),
+                "start_time": iso(h.start_time),
+                "stop_time": iso(h.stop_time),
+                "duration_minutes": h.duration_minutes
+            })
+        return jsonify(out)
 
 @app.route("/delete_task", methods=["POST"])
 def delete_task():
@@ -234,32 +286,48 @@ def update_task_info():
         session.commit()
         return jsonify(success=True)
     
-
-
 @app.route("/update_task_timer", methods=["POST"])
 def update_task_timer():
     data = request.get_json()
-    task_id = data["task_id"]
-    action = data["action"]  # "start" or "stop"
+    task_id = int(data["task_id"])
+    action = data["action"]
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    now = datetime.now(timezone.utc)
 
-    if action == "start":
-        cur.execute("UPDATE sub_tasks SET start_time = datetime('now') WHERE id = ?", (task_id,))
-        cur.execute("""INSERT INTO task_history (task_id, timestamp, note) VALUES (?, datetime('now'), ?)""", (task_id, 'Start'))
-    elif action == "stop":
-        cur.execute("""
-            UPDATE sub_tasks
-            SET stop_time = datetime('now'),
-                duration_minutes = CAST((strftime('%s', datetime('now')) - strftime('%s', start_time)) / 60 AS INTEGER)
-            WHERE id = ?
-        """, (task_id,))
-        cur.execute("INSERT INTO task_history (task_id, timestamp, note) VALUES (?, datetime('now'), ?)", 
-                    (task_id, 'Stop'))
+    with SessionLocal() as session:
+        t = session.get(Task, task_id)
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
 
-    conn.commit()
-    conn.close()
+        if action == "start":
+            if t.start_time is None:
+                t.start_time = now
+                session.add(TaskHistory(
+                    task_id=task_id, timestamp=now, note="start", completed=t.completed
+                ))
+            # duplicate starts are ignored
+
+        elif action == "stop":
+            start_dt = as_utc(t.start_time)
+            if start_dt is None:
+                last_start = (session.query(TaskHistory)
+                              .filter(TaskHistory.task_id == task_id,
+                                      TaskHistory.note == "start")
+                              .order_by(TaskHistory.id.desc())
+                              .first())
+                start_dt = as_utc(last_start.timestamp) if last_start else None
+
+            dur_min = int((now - start_dt).total_seconds() // 60) if start_dt else None
+
+            session.add(TaskHistory(
+                task_id=task_id, timestamp=now, note="stop",
+                completed=t.completed, start_time=start_dt, stop_time=now,
+                duration_minutes=dur_min
+            ))
+            t.start_time = None
+
+        session.commit()
+
     return jsonify(success=True)
 
 with open("schema.sql", "r", encoding="utf-8") as f:

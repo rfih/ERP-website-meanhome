@@ -53,12 +53,31 @@ function submitTask(){
 }
 
 function updateTask(taskId, orderId){
-  const val = parseInt(document.getElementById('done-'+taskId).value||'0',10);
-  fetch('/update_task',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ task_id:taskId, order_id:orderId, completed:val })})
-    .then(r=>r.json()).then(j=>{ if(j.success){ location.reload(); } else alert(j.message||'更新失敗'); });
+  const input = document.getElementById('done-'+taskId);
+  const raw   = parseInt((input && input.value) || '0', 10);
+
+  fetch('/update_task', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ task_id: taskId, order_id: orderId, completed: raw })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(j.success){
+      // server returns the clamped completed value
+      updateTaskRowUI(taskId, j.completed);
+      recalcOrderProgress(orderId);
+      toast('更新完成');
+    }else{
+      alert(j.message || '更新失敗');
+    }
+  })
+  .catch(()=> alert('更新失敗'));
 }
 
-function showHistory(taskId, orderId) {
+function fmt(dt){ return dt ? new Date(dt).toLocaleString() : '-' }
+
+function showHistory(taskId){
   openModal("modal-history");
   const box = document.getElementById("history-content");
   box.innerHTML = "<p>Loading...</p>";
@@ -66,33 +85,29 @@ function showHistory(taskId, orderId) {
   fetch(`/task-history/${taskId}`)
     .then(r => r.json())
     .then(data => {
-      console.log("Fetched history:", data);
+      if (!data || !data.length) { box.innerHTML = "<p>No updates recorded yet.</p>"; return; }
 
-      if (!data || data.length === 0) {
-        box.innerHTML = "<p>No updates recorded yet.</p>";
-        return;
-      }
+      let html = "";
+      for (const item of data) {
+        const kind = item.note || "update";
+        const hasRun = kind === "stop"; // completed run
+        const delta = (item.delta !== null && item.delta !== undefined) ? item.delta : null;
+        const pace = (hasRun && item.duration_minutes && delta)
+          ? (delta * 60 / item.duration_minutes).toFixed(1) : null;
 
-      data.forEach(item => {
         html += `
-          <div style="padding:6px; border-bottom:1px solid #ccc">
-            ${item.note ? '動作: ' + item.note + '<br>' : ''}
-            完成數量: ${item.completed} <br>
-            記錄時間: ${item.timestamp} <br>
-            開始時間: ${item.start_time || '-'} <br>
-            結束時間: ${item.stop_time || '-'} <br>
-            所需時間: ${item.duration_minutes ? item.duration_minutes + ' 分鐘' : '-'}
-          </div>
-        `;
-      });
-
-
+          <div style="padding:8px 10px;border-bottom:1px solid #e5e5e5">
+            ${kind === 'start' ? '動作: start' : kind === 'stop' ? '動作: stop' : '動作: update'}<br>
+            ${delta !== null ? `本次: ${delta}　` : ''}總計: ${item.completed ?? '-'}<br>
+            記錄時間: ${fmt(item.timestamp)}<br>
+            ${hasRun ? `開始時間: ${fmt(item.start_time)}<br>` : ''}
+            ${hasRun ? `結束時間: ${fmt(item.stop_time)}<br>` : ''}
+            ${hasRun ? `所需時間: ${item.duration_minutes ?? '-'} 分鐘${pace ? `（效率: ${pace}/hr）` : ''}` : ''}
+          </div>`;
+      }
       box.innerHTML = html;
     })
-    .catch(err => {
-      console.error("History fetch failed:", err);
-      box.innerHTML = "<p>Error loading history.</p>";
-    });
+    .catch(() => { box.innerHTML = "<p>Error loading history.</p>";});
 }
 
 function editTask(id, orderId, group, task, quantity) {
@@ -122,12 +137,28 @@ function submitEditTask() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  }).then(r => r.json()).then(j => {
+  })
+  .then(r => r.json())
+  .then(j => {
     if (j.success) {
+      // update row without reload
+      const row = document.getElementById('task-'+payload.task_id);
+      if (row){
+        row.dataset.qty = payload.quantity;
+        row.querySelector('.qty').textContent  = payload.quantity;
+        row.querySelector('.name').textContent = payload.task;
+        // recompute remaining + progress with the (possibly same) completed input
+        const comp = parseInt((row.querySelector('input[id^="done-"]').value)||'0',10);
+        updateTaskRowUI(payload.task_id, comp);
+        recalcOrderProgress(payload.order_id);
+      }
       closeModal("modal-edit-task");
-      location.reload();
-    } else alert(j.message || "更新失敗");
-  });
+      toast('已更新');
+    } else {
+      alert(j.message || "更新失敗");
+    }
+  })
+  .catch(()=> alert("更新失敗"));
 }
 
 function deleteTask(taskId, orderId) {
@@ -162,40 +193,138 @@ function addPlannedStation() {
   container.appendChild(tmpl.content.cloneNode(true));
 }
 
-function startTask(taskId) {
+// ---- helpers -------------------------------------------------
+function toast(msg){
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText =
+    'position:fixed;right:16px;bottom:16px;background:#343a40;color:#fff;' +
+    'padding:8px 12px;border-radius:6px;opacity:.95;z-index:2000';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+function setRunningUI(taskId, running){
+  const row = document.getElementById('task-'+taskId);
+  if (!row) return;
+  const startBtn = row.querySelector('button[onclick^="startTask"]');
+  const stopBtn  = row.querySelector('button[onclick^="stopTask"]');
+
+  if (startBtn) startBtn.disabled = running;
+  if (stopBtn)  stopBtn.disabled  = !running;
+
+  // optional: row highlight
+  row.classList.toggle('is-running', running);
+
+  // optional: little badge near the task name
+  let badge = row.querySelector('.task-running-badge');
+  if (!badge) {
+    const nameCell = row.querySelector('.name') || row.children[3];
+    if (nameCell) {
+      badge = document.createElement('span');
+      badge.className = 'task-running-badge';
+      badge.style.cssText = 'margin-left:6px;padding:2px 6px;border-radius:10px;background:#ffc107;color:#000;font-size:12px;';
+      nameCell.appendChild(badge);
+    }
+  }
+  if (badge) badge.textContent = running ? 'RUNNING' : '';
+}
+
+// ---- no-reload start/stop -----------------------------------
+function startTask(taskId){
   fetch('/update_task_timer', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ task_id: taskId, action: "start" })
-  }).then(r => r.json()).then(j => {
-    if (j.success) location.reload();
-    else alert("Start failed");
-  });
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ task_id: taskId, action: 'start' })
+  })
+  .then(r => r.json())
+  .then(j => {
+    if (!j.success) throw new Error('start failed');
+    setRunningUI(taskId, true);
+    toast('已開始');
+  })
+  .catch(() => alert('Start failed'));
 }
 
-function stopTask(taskId) {
+function stopTask(taskId){
   fetch('/update_task_timer', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ task_id: taskId, action: "stop" })
-  }).then(r => r.json()).then(j => {
-    if (j.success) location.reload();
-    else alert("Stop failed");
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ task_id: taskId, action: 'stop' })
+  })
+  .then(r => r.json())
+  .then(j => {
+    if (!j.success) throw new Error('stop failed');
+    setRunningUI(taskId, false);
+    toast('已停止');
+  })
+  .catch(() => alert('Stop failed'));
+}
+
+function toLocal(s) {
+  if (!s) return '-';
+  let str = s.trim();
+
+  // Ensure ISO shape
+  if (!str.includes('T')) str = str.replace(' ', 'T');
+  // Normalize UTC offset
+  str = str.replace('+00:00', 'Z');
+  // Trim fractional seconds to 3 digits (JS Date prefers milliseconds)
+  str = str.replace(/\.(\d{3})\d+/, '.$1');
+
+  const d = new Date(str);
+  if (isNaN(d)) return s;  // fallback
+  return d.toLocaleString();
+}
+
+function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+
+function updateTaskRowUI(taskId, completed){
+  const row = document.getElementById('task-'+taskId);
+  if(!row) return;
+  const qty = parseInt(row.dataset.qty || '0', 10);
+  const rem = Math.max(0, qty - completed);
+
+  // input (server may clamp)
+  const input = document.getElementById('done-'+taskId);
+  if (input) input.value = completed;
+
+  // progress bar in this row
+  const bar = row.querySelector('.progress-fill');
+  const pct = qty > 0 ? (completed / qty) * 100 : 0;
+  if (bar) bar.style.width = pct + '%';
+
+  // remaining cell
+  const remCell = row.querySelector('.remaining');
+  if (remCell) remCell.textContent = rem;
+}
+
+function recalcOrderProgress(orderId){
+  const tbody = document.getElementById('details-'+orderId);
+  if(!tbody) return;
+
+  let total = 0, done = 0;
+
+  tbody.querySelectorAll('tr[id^="task-"]').forEach(r=>{
+    const qty = parseInt(r.dataset.qty || '0', 10);
+    const compInput = r.querySelector('input[id^="done-"]');
+    const comp = parseInt((compInput && compInput.value) || '0', 10);
+    total += qty;
+    done  += clamp(comp, 0, qty);
   });
+
+  const orderRow = document.getElementById('order-'+orderId);
+  const bar = orderRow && orderRow.querySelector('.progress-fill');
+  if (bar) bar.style.width = (total ? (done/total)*100 : 0) + '%';
 }
 
-async function updateAndLoadHistory(taskId) {
-  await fetch(`/update_task_timer`, { method: 'POST' });
-
-  setTimeout(() => {
-    fetch(`/task-history/${taskId}`)
-      .then(r => r.json())
-      .then(data => {
-        console.log("History data:", data);
-        // you can call showHistory() or update DOM here
-      });
-  }, 300);
+// optional little feedback
+function toast(msg){
+  try{
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.cssText = 'position:fixed;right:16px;bottom:16px;background:#343a40;color:#fff;padding:8px 12px;border-radius:6px;opacity:.95;z-index:2000';
+    document.body.appendChild(el);
+    setTimeout(()=>{ el.remove(); }, 1400);
+  }catch(e){}
 }
-
-// call it when needed
-updateAndLoadHistory(4);
