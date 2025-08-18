@@ -193,6 +193,30 @@
     <tr class="order-gap"><td colspan="13" aria-hidden="true"></td></tr>
     {% endif %}
     {% endfor %}
+  <!-- Import Modal -->
+  <button class="btn" onclick="location.href='/export/orders.xlsx'">Export Excel</button>
+  <button class="btn gray" onclick="openModal('modal-import')">Import Excel</button>
+  <div id="modal-import" class="modal" onclick="if(event.target===this) closeModal('modal-import')">
+    <div class="panel">
+      <h3 style="margin:0">Import Orders (Excel .xlsx)</h3>
+      <input type="file" id="import-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="margin-top:10px">
+      <div style="margin-top:8px">
+        <input id="import-sheet" placeholder="工作表名稱 (例如: 生產中門框)" value="生產中門框" />
+      </div>
+      <div style="margin-top:12px"><button class="btn" onclick="submitImport()">Upload & Import</button></div>
+    </div>
+  </div>
+  <div id="modal-bulk" class="modal" onclick="if(event.target===this) closeModal('modal-bulk')">
+    <div class="panel">
+      <h3 style="margin:0">Bulk Add Tasks</h3>
+      <input type="hidden" id="bulk-order-id">
+      <div class="station-planner" id="bulk-planner"></div>
+      <button class="btn gray" onclick="addPlannedStationTo('bulk-planner')">+ 新增站</button>
+      <div style="margin-top:12px"><button class="btn" onclick="submitBulkTasks()">Save</button></div>
+    </div>
+  </div>
+
+
   <!-- Add Order Modal -->
   <div id="modal-order" class="modal" onclick="if(event.target===this) closeModal('modal-order')">
     <div class="panel">

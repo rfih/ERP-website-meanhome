@@ -1,7 +1,14 @@
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, send_file
 from datetime import datetime, timezone
 from db import Base, engine, SessionLocal
 from models import Order, Task, TaskHistory
+from io import BytesIO
+import openpyxl
+from openpyxl import Workbook
+import warnings
+from sqlalchemy import text
+import re, unicodedata
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 def utcnow():
     return datetime.now(timezone.utc)
@@ -332,6 +339,189 @@ def update_task_timer():
 
 with open("schema.sql", "r", encoding="utf-8") as f:
     schema = f.read()
+
+@app.route("/export/orders.xlsx")
+def export_orders_xlsx():
+    wb = Workbook()
+    ws_orders = wb.active
+    ws_orders.title = "orders"
+
+    # Header row (match your UI)
+    ws_orders.append(["客戶交期","預計出貨","製令號碼","專案名稱","產品名稱","數量","派單日","封邊","面飾","作業內容","order_id"])
+
+    with SessionLocal() as s:
+        orders = s.query(Order).order_by(Order.id).all()
+        for o in orders:
+            ws_orders.append([
+                o.demand_date or "",
+                o.delivery or "",
+                o.manufacture_code or "",
+                o.customer or "",
+                o.product or "",
+                o.quantity or 0,
+                o.datecreate or "",
+                o.fengbian or "",
+                o.wallpaper or "",
+                o.jobdesc or "",
+                o.id,
+            ])
+
+        # tasks sheet
+        ws_tasks = wb.create_sheet("tasks")
+        ws_tasks.append(["order_id","組別","工作內容","數量","已完成","task_id"])
+        tasks = s.query(Task).order_by(Task.order_id, Task.id).all()
+        for t in tasks:
+            ws_tasks.append([t.order_id, t.group or "", t.task or "", t.quantity or 0, t.completed or 0, t.id])
+
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    return send_file(
+        bio,
+        as_attachment=True,
+        download_name="orders_export.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+def _cell(v):
+    # keep as string; your DB stores text dates already
+    return "" if v is None else str(v).replace("\n","").strip()
+
+def _norm(s):
+    if s is None: return ""
+    s = unicodedata.normalize("NFKC", str(s))
+    return s.replace("\n","").replace(" ","").strip()
+
+def _find_header(ws):
+    for r_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        vals = [_norm(v) for v in row]
+        if any(vals):
+            return vals, r_idx
+    return None, None
+
+# --- flexible patterns (substring/regex) ---
+PATTERNS = {
+    # demand date: 客戶要求交期 / 客戶交期
+    "demand":   [r"客戶.*交期"],
+    # delivery: 任意含「出貨/出货」，covers 預計可出貨日 / 預計出貨 / 可出貨日 ...
+    "delivery": [r"出貨", r"出货"],
+    # code: 製令(號碼/号码) with or without line breaks
+    "code":     [r"製令.*(號碼|号码)"],
+    "customer": [r"專案名稱"],
+    "product":  [r"產品.*名"],
+    "qty":      [r"數量"],
+    "datecre":  [r"派單日|派单日"],
+    "fengbian": [r"封邊|封边"],
+    "wall":     [r"面飾|面饰"],
+    "jobdesc":  [r"作業內容|作业.*容"],
+}
+
+def _col_by_patterns(header, patterns):
+    for i, h in enumerate(header):
+        for pat in patterns:
+            if re.search(pat, h):
+                return i
+    return None
+
+@app.route("/import_orders", methods=["POST"])
+def import_orders():
+    f = request.files.get("file")
+    if not f:
+        return jsonify(success=False, message="No file"), 400
+
+    # take explicit sheet name from query (?sheet=生產中門框) or form field
+    sheet_name = (request.args.get("sheet") or request.form.get("sheet") or "").strip()
+
+    wb = openpyxl.load_workbook(f, read_only=True, data_only=True)
+
+    # choose sheet without scanning all sheetnames if user provided one
+    if sheet_name:
+        try:
+            ws = wb[sheet_name]
+        except KeyError:
+            return jsonify(success=False, message=f"找不到工作表: {sheet_name}"), 400
+    else:
+        # default: first sheet (no sheet scanning)
+        ws = wb[wb.sheetnames[0]]
+
+    header, header_row = _find_header(ws)
+    if not header:
+        return jsonify(success=False, message="找不到標題列"), 400
+
+    # acceptable synonyms
+    synonyms = {
+        "demand":   {"客戶交期","客戶要求交期"},
+        "delivery": {"預計出貨","可出貨日"},
+        "code":     {"製令號碼","製令号碼","製令号码"},
+        "customer": {"專案名稱"},
+        "product":  {"產品名稱","產品名"},
+        "qty":      {"數量"},
+        "datecre":  {"派單日","派单日"},
+        "fengbian": {"封邊","封边"},
+        "wall":     {"面飾","面饰"},
+        "jobdesc":  {"作業內容","作业內容","作业内容"},
+    }
+
+    def col(keys):
+        for k in keys:
+            if k in header:
+                return header.index(k)
+        return None
+
+    # make a header index on THIS sheet only
+    idx = {k: _col_by_patterns(header, v) for k, v in PATTERNS.items()}
+
+    required_keys = ["demand","delivery","code","customer","product","qty","datecre"]
+    missing = [k for k in required_keys if idx[k] is None]
+    if missing:
+        # friendlier error showing which ones are missing
+        zh = {
+            "demand":"客戶交期",
+            "delivery":"預計出貨",
+            "code":"製令號碼",
+            "customer":"專案名稱",
+            "product":"產品名稱",
+            "qty":"數量",
+            "datecre":"派單日"
+        }
+        miss_names = "、".join(zh[k] for k in missing)
+        return jsonify(success=False, message=f"此工作表缺少必要欄位：{miss_names}（{sheet_name or ws.title}）"), 400
+
+    def cell(v):
+        return "" if v is None else str(v).strip()
+
+    created = 0
+    with SessionLocal() as s:
+        for row in ws.iter_rows(min_row=header_row+1, values_only=True):
+            if not row or not any(row): 
+                continue
+            def get(key):
+                i = idx[key]
+                return cell(row[i]) if i is not None and i < len(row) else ""
+
+            try:
+                qty = int((get("qty") or "0"))
+            except ValueError:
+                qty = 0
+
+            o = Order(
+                demand_date      = get("demand"),
+                delivery         = get("delivery"),
+                manufacture_code = get("code"),
+                customer         = get("customer"),
+                product          = get("product"),
+                quantity         = qty,
+                datecreate       = get("datecre"),
+                fengbian         = get("fengbian"),
+                wallpaper        = get("wall"),
+                jobdesc          = get("jobdesc"),
+            )
+            s.add(o)
+            created += 1
+
+        s.commit()
+
+    return jsonify(success=True, created=created, sheet=sheet_name or ws.title)
 
 if __name__ == "__main__":
     app.run(debug=True)

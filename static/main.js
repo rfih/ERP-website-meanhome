@@ -463,3 +463,90 @@ function toast(msg){
     setTimeout(()=>{ el.remove(); }, 1400);
   }catch(e){}
 }
+
+function submitImport(){
+  const f = document.getElementById('import-file').files[0];
+  const sheet = (document.getElementById('import-sheet').value || '').trim();
+  if(!f){ alert('請選擇檔案'); return; }
+
+  const fd = new FormData();
+  fd.append('file', f);
+  // optional: also append sheet in form, but we’ll send via query param
+  if (sheet) fd.append('sheet', sheet);
+
+  const url = sheet ? `/import_orders?sheet=${encodeURIComponent(sheet)}` : '/import_orders';
+
+  fetch(url, { method:'POST', body: fd })
+    .then(r=>r.json())
+    .then(j=>{
+      if(j.success){
+        toast(`已從「${j.sheet}」匯入 ${j.created} 筆`);
+        location.reload();
+      } else {
+        alert(j.message || '匯入失敗');
+      }
+    })
+    .catch(()=> alert('匯入失敗'));
+}
+
+function addPlannedStationTo(containerId){
+  const container = document.getElementById(containerId);
+  const tmpl = document.getElementById("station-template");
+  const frag = tmpl.content.cloneNode(true);
+
+  // custom toggle on this row
+  const row = frag.querySelector('.row');
+  const sel = row.querySelector('.station-select');
+  const custom = row.querySelector('.custom-station-input');
+  sel.addEventListener('change', () => {
+    if (sel.value === '__custom__') { custom.style.display = ''; custom.focus(); }
+    else { custom.style.display = 'none'; custom.value = ''; }
+  });
+
+  container.appendChild(frag);
+}
+
+// keep existing function working
+function addPlannedStation(){ addPlannedStationTo('station-planner'); }
+
+
+function openBulkTasksModal(orderId){
+  document.getElementById('bulk-order-id').value = orderId || '';
+  const wrap = document.getElementById('bulk-planner');
+  wrap.innerHTML = '';
+  // start with 3 empty rows
+  addPlannedStationTo('bulk-planner');
+  addPlannedStationTo('bulk-planner');
+  addPlannedStationTo('bulk-planner');
+  openModal('modal-bulk');
+}
+
+function submitBulkTasks(){
+  const orderId = parseInt(document.getElementById('bulk-order-id').value || '0', 10);
+  if(!orderId){ alert('Order 不存在'); return; }
+
+  const rows = document.querySelectorAll('#bulk-planner .row');
+  const tasks = [];
+  for(const row of rows){
+    const sel = row.querySelector('.station-select');
+    const custom = row.querySelector('.custom-station-input');
+    const name = row.querySelector('.task-name-input');
+    const groupVal = (sel.value === '__custom__') ? (custom.value||'').trim() : sel.value;
+    const taskVal  = (name.value||'').trim();
+    const qtyVal   = 1; // default 1; change to your desired default or add a qty input in the row
+    if(groupVal && taskVal){ tasks.push({ group: groupVal, task: taskVal, quantity: qtyVal }); }
+  }
+  if(!tasks.length){ alert('請新增至少一項'); return; }
+
+  fetch('/add_tasks_bulk', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ order_id: orderId, tasks })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(j.success){ closeModal('modal-bulk'); toast('已新增'); location.reload(); }
+    else alert(j.message||'新增失敗');
+  })
+  .catch(()=> alert('新增失敗'));
+}

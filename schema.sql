@@ -47,3 +47,11 @@ ALTER TABLE task_history ADD COLUMN completed INTEGER;
 ALTER TABLE task_history ADD COLUMN start_time TEXT;
 ALTER TABLE task_history ADD COLUMN stop_time TEXT;
 ALTER TABLE task_history ADD COLUMN duration_minutes INTEGER;
+
+CREATE TABLE IF NOT EXISTS station_keywords (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  keyword TEXT NOT NULL UNIQUE,
+  "group" TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_station_keywords_keyword
+ON station_keywords(keyword);
