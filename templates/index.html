@@ -248,7 +248,24 @@
         <button class="btn" onclick="closeModal('modal-task')">Close</button>
       </div>
       <input type="hidden" id="t-order-id" />
-      <div style="margin-top:10px"><input id="t-group" placeholder="組別"></div>
+      <div style="margin-top:10px; display:flex; gap:12px; align-items:center">
+        <select id="t-group-select" class="station-select" style="min-width:180px">
+          <option value="">-- 選擇組別 --</option>
+          <option value="原物料裁切組">原物料裁切組</option>
+          <option value="框架組">框架組</option>
+          <option value="膠合組">膠合組</option>
+          <option value="門裁切組">門裁切組</option>
+          <option value="封邊組">封邊組</option>
+          <option value="整修組">整修組</option>
+          <option value="噴漆組">噴漆組</option>
+          <option value="CNC組">CNC組</option>
+          <option value="包裝組">包裝組</option>
+          <option value="自動缐組">自動缐組</option>
+          <option value="__custom__">自訂組別…</option>
+        </select>
+        <input type="text" id="t-group-custom" class="custom-station-input"
+              placeholder="輸入自訂組別名稱" style="display:none; width:160px">
+      </div>
       <div style="margin-top:8px"><input id="t-task" placeholder="工作內容"></div>
       <div style="margin-top:8px"><input id="t-qty" type="number" placeholder="數量"></div>
       <div style="margin-top:12px"><button class="btn" onclick="submitTask()">Save</button></div>
@@ -274,7 +291,24 @@
     <h3>Edit Task</h3>
     <input type="hidden" id="edit-task-id" />
     <input type="hidden" id="edit-order-id" />
-    <div style="margin-top:8px"><input id="edit-group" placeholder="組別"></div>
+    <div style="margin-top:8px; display:flex; gap:12px; align-items:center">
+      <select id="edit-group-select" class="station-select" style="min-width:180px">
+        <option value="">-- 選擇組別 --</option>
+        <option value="原物料裁切組">原物料裁切組</option>
+        <option value="框架組">框架組</option>
+        <option value="膠合組">膠合組</option>
+        <option value="門裁切組">門裁切組</option>
+        <option value="封邊組">封邊組</option>
+        <option value="整修組">整修組</option>
+        <option value="噴漆組">噴漆組</option>
+        <option value="CNC組">CNC組</option>
+        <option value="包裝組">包裝組</option>
+        <option value="自動缐組">自動缐組</option>
+        <option value="__custom__">自訂組別…</option>
+      </select>
+      <input type="text" id="edit-group-custom" class="custom-station-input"
+            placeholder="輸入自訂組別名稱" style="display:none; width:160px">
+    </div>
     <div style="margin-top:8px"><input id="edit-name" placeholder="工作內容"></div>
     <div style="margin-top:8px"><input id="edit-qty" type="number" placeholder="數量"></div>
     <div style="margin-top:12px"><button class="btn" onclick="submitEditTask()">Save</button></div>

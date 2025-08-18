@@ -42,20 +42,66 @@ function submitOrder(){
     .then(r=>r.json()).then(j=>{ if(j.success){ closeModal('modal-order'); } else alert(j.message||'新增失敗'); });
 }
 
-function openTaskModal(orderId){ document.getElementById('t-order-id').value = orderId; openModal('modal-task'); }
+function openTaskModal(orderId){
+  document.getElementById('t-order-id').value = orderId;
+
+  // reset fields
+  const sel = document.getElementById('t-group-select');
+  const custom = document.getElementById('t-group-custom');
+  if (sel && custom) {
+    sel.value = "";
+    custom.value = "";
+    custom.style.display = 'none';
+  }
+  document.getElementById('t-task').value = "";
+  document.getElementById('t-qty').value = "";
+
+  openModal('modal-task');
+}
+
+(function wireAddTaskGroupSelect(){
+  const sel = document.getElementById('t-group-select');
+  const custom = document.getElementById('t-group-custom');
+  if (!sel || !custom) return;
+  sel.addEventListener('change', () => {
+    if (sel.value === '__custom__') {
+      custom.style.display = '';
+      custom.focus();
+    } else {
+      custom.style.display = 'none';
+      custom.value = '';
+    }
+  });
+})();
 
 function submitTask(){
+  const sel = document.getElementById('t-group-select');
+  const custom = document.getElementById('t-group-custom');
+
+  const groupVal = (sel.value === '__custom__')
+    ? (custom.value || '').trim()
+    : (sel.value || '').trim();
+
   const payload = {
     order_id: parseInt(document.getElementById('t-order-id').value,10),
-    group: document.getElementById('t-group').value.trim(),
+    group: groupVal,
     task: document.getElementById('t-task').value.trim(),
     quantity: parseInt(document.getElementById('t-qty').value||'0',10),
     completed: 0
   };
-  if(!payload.group || !payload.task || !payload.quantity){ alert('請填寫完整資料'); return; }
-  fetch('/add_task',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)})
-    .then(r=>r.json()).then(j=>{ if(j.success){ closeModal('modal-task'); } else alert(j.message||'新增失敗'); });
-}
+
+  if(!payload.group || !payload.task || !payload.quantity){
+    alert('請填寫完整資料'); return;
+  }
+
+  fetch('/add_task',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  })
+  .then(r=>r.json())
+  .then(j=>{ if(j.success){ closeModal('modal-task'); } else alert(j.message||'新增失敗'); });
+} 
 
 function updateTask(taskId, orderId){
   const val = parseInt(document.getElementById('done-'+taskId).value || '0', 10);
@@ -151,17 +197,48 @@ function showHistory(taskId){
 function editTask(id, orderId, group, task, quantity) {
   document.getElementById("edit-task-id").value = id;
   document.getElementById("edit-order-id").value = orderId;
-  document.getElementById("edit-group").value = group;
   document.getElementById("edit-name").value = task;
   document.getElementById("edit-qty").value = quantity;
+
+  const sel = document.getElementById("edit-group-select");
+  const custom = document.getElementById("edit-group-custom");
+
+  // reset
+  if (custom) { custom.style.display = 'none'; custom.value = ''; }
+  if (sel) {
+    // try to match a built-in option
+    let matched = false;
+    for (const opt of sel.options) {
+      if (opt.value && opt.value !== '__custom__' && opt.value === group) {
+        sel.value = opt.value;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      // fall back to custom
+      sel.value = group ? '__custom__' : '';
+      if (group) {
+        custom.style.display = '';
+        custom.value = group;
+      }
+    }
+  }
+
   openModal("modal-edit-task");
 }
 
 function submitEditTask() {
+  const sel = document.getElementById('edit-group-select');
+  const custom = document.getElementById('edit-group-custom');
+  const groupVal = (sel.value === '__custom__')
+    ? (custom.value || '').trim()
+    : (sel.value || '').trim();
+
   const payload = {
     task_id: parseInt(document.getElementById("edit-task-id").value),
     order_id: parseInt(document.getElementById("edit-order-id").value),
-    group: document.getElementById("edit-group").value.trim(),
+    group: groupVal,
     task: document.getElementById("edit-name").value.trim(),
     quantity: parseInt(document.getElementById("edit-qty").value || '0', 10)
   };
@@ -179,17 +256,6 @@ function submitEditTask() {
   .then(r => r.json())
   .then(j => {
     if (j.success) {
-      // update row without reload
-      const row = document.getElementById('task-'+payload.task_id);
-      if (row){
-        row.dataset.qty = payload.quantity;
-        row.querySelector('.qty').textContent  = payload.quantity;
-        row.querySelector('.name').textContent = payload.task;
-        // recompute remaining + progress with the (possibly same) completed input
-        const comp = parseInt((row.querySelector('input[id^="done-"]').value)||'0',10);
-        updateTaskRowUI(payload.task_id, comp);
-        recalcOrderProgress(payload.order_id);
-      }
       closeModal("modal-edit-task");
       toast('已更新');
     } else {
@@ -211,6 +277,22 @@ function deleteTask(taskId, orderId) {
     else alert(j.message || "刪除失敗");
   });
 }
+
+(function wireEditTaskGroupSelect(){
+  const sel = document.getElementById('edit-group-select');
+  const custom = document.getElementById('edit-group-custom');
+  if (!sel || !custom) return;
+  sel.addEventListener('change', () => {
+    if (sel.value === '__custom__') {
+      custom.style.display = '';
+      custom.focus();
+    } else {
+      custom.style.display = 'none';
+      custom.value = '';
+    }
+  });
+})();
+
 
 function deleteOrder(orderId) {
   if (!confirm("Are you sure you want to delete this order and all its tasks?")) return;
