@@ -550,3 +550,92 @@ function submitBulkTasks(){
   })
   .catch(()=> alert('新增失敗'));
 }
+
+function openEditOrder(orderId){
+  const row = document.getElementById('order-'+orderId);
+  if(!row) return;
+  // fill modal
+  document.getElementById('e-id').value         = orderId;
+  document.getElementById('e-demand').value     = row.dataset.demand || '';
+  document.getElementById('e-delivery').value   = row.dataset.delivery || '';
+  document.getElementById('e-code').value       = row.dataset.code || '';
+  document.getElementById('e-customer').value   = row.dataset.customer || '';
+  document.getElementById('e-product').value    = row.dataset.product || '';
+  document.getElementById('e-qty').value        = row.dataset.qty || '';
+  document.getElementById('e-datecreate').value = row.dataset.datecreate || '';
+  document.getElementById('e-fengbian').value   = row.dataset.fengbian || '';
+  document.getElementById('e-wallpaper').value  = row.dataset.wallpaper || '';
+  document.getElementById('e-jobdesc').value    = row.dataset.jobdesc || '';
+  openModal('modal-edit-order');
+}
+
+function submitEditOrder(){
+  const payload = {
+    order_id: parseInt(document.getElementById('e-id').value, 10),
+    demand_date:   (document.getElementById('e-demand').value || '').trim(),
+    delivery:      (document.getElementById('e-delivery').value || '').trim(),
+    manufacture_code: (document.getElementById('e-code').value || '').trim(),
+    customer:      (document.getElementById('e-customer').value || '').trim(),
+    product:       (document.getElementById('e-product').value || '').trim(),
+    quantity:      parseInt(document.getElementById('e-qty').value || '0', 10),
+    datecreate:    (document.getElementById('e-datecreate').value || '').trim(),
+    fengbian:      (document.getElementById('e-fengbian').value || '').trim(),
+    wallpaper:     (document.getElementById('e-wallpaper').value || '').trim(),
+    jobdesc:       (document.getElementById('e-jobdesc').value || '').trim(),
+  };
+
+  if(!payload.manufacture_code || !payload.customer || !payload.product){
+    alert('請至少填入 製令號碼 / 專案名稱 / 產品名稱'); return;
+  }
+
+  fetch('/update_order', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(!j.success){ alert(j.message || '更新失敗'); return; }
+    // update DOM row
+    applyOrderRowUpdate(payload.order_id, j.order);
+    closeModal('modal-edit-order');
+    toast('已更新訂單');
+  })
+  .catch(()=> alert('更新失敗'));
+}
+
+// helper: write the new values into the row + dataset
+function applyOrderRowUpdate(orderId, o){
+  const row = document.getElementById('order-'+orderId);
+  if(!row || !row.children) return;
+
+  // update dataset (for next edit)
+  row.dataset.demand     = o.demand_date || '';
+  row.dataset.delivery   = o.delivery || '';
+  row.dataset.code       = o.manufacture_code || '';
+  row.dataset.customer   = o.customer || '';
+  row.dataset.product    = o.product || '';
+  row.dataset.qty        = o.quantity ?? 0;
+  row.dataset.datecreate = o.datecreate || '';
+  row.dataset.fengbian   = o.fengbian || '';
+  row.dataset.wallpaper  = o.wallpaper || '';
+  row.dataset.jobdesc    = o.jobdesc || '';
+
+  // update visible cells by index:
+  // 0: progress | 1: 客戶交期 | 2: 預計出貨 | 3: 製令號碼 | 4: 專案名稱 | 5: 產品名稱
+  // 6: 數量     | 7: 派單日   | 8: 封邊     | 9: 面飾     | 10: 作業內容 | 11: 現場組別 | 12: Actions
+  const cells = row.children;
+  if (cells[1])  cells[1].textContent = o.demand_date || '';
+  if (cells[2])  cells[2].textContent = o.delivery || '';
+  if (cells[3])  cells[3].textContent = o.manufacture_code || '';
+  if (cells[4])  cells[4].textContent = o.customer || '';
+  if (cells[5])  cells[5].textContent = o.product || '';
+  if (cells[6])  cells[6].textContent = (o.quantity ?? 0);
+  if (cells[7])  cells[7].textContent = o.datecreate || '';
+  if (cells[8])  cells[8].textContent = o.fengbian || '';
+  if (cells[9])  cells[9].textContent = o.wallpaper || '';
+  if (cells[10]) cells[10].textContent = o.jobdesc || '';
+
+  // if quantity changed and you want to recompute order progress:
+  try { updateOrderProgress(orderId); } catch(e){}
+}

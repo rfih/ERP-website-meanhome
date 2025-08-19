@@ -110,7 +110,17 @@
       <th>Actions</th>
     </tr>
     {% for o in orders %}
-    <tr id="order-{{o.id}}">
+    <tr id="order-{{o.id}}"
+      data-demand="{{ o.demand_date|e }}"
+      data-delivery="{{ o.delivery|e }}"
+      data-code="{{ o.manufacture_code|e }}"
+      data-customer="{{ o.customer|e }}"
+      data-product="{{ o.product|e }}"
+      data-qty="{{ o.quantity }}"
+      data-datecreate="{{ o.datecreate|e }}"
+      data-fengbian="{{ o.fengbian|e }}"
+      data-wallpaper="{{ o.wallpaper|e }}"
+      data-jobdesc="{{ o.jobdesc|e }}">
       <td>
         {% set done = o.progress[0] %}
         {% set total = o.progress[1] if o.progress[1] else 1 %}
@@ -131,6 +141,7 @@
       <td id="groups-{{o.id}}">{{ o.active_groups }}</td>
       <td>
         <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
+        <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
         <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
       </td>
     </tr>
@@ -262,6 +273,29 @@
     <button class="btn red" onclick="this.parentNode.remove()">X</button>
   </div>
 </template>
+
+  <div id="modal-edit-order" class="modal" onclick="if(event.target===this) closeModal('modal-edit-order')">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0">Edit Order</h3>
+        <button class="btn" onclick="closeModal('modal-edit-order')">Close</button>
+      </div>
+
+      <input type="hidden" id="e-id" />
+      <div style="margin-top:10px"><input id="e-demand" placeholder="客戶交期 YYYY/MM/DD"></div>
+      <div style="margin-top:8px"><input id="e-delivery" placeholder="預計出貨 YYYY/MM/DD"></div>
+      <div style="margin-top:8px"><input id="e-code" placeholder="製令號碼"></div>
+      <div style="margin-top:8px"><input id="e-customer" placeholder="專案名稱"></div>
+      <div style="margin-top:8px"><input id="e-product" placeholder="產品名稱"></div>
+      <div style="margin-top:8px"><input id="e-qty" type="number" placeholder="數量"></div>
+      <div style="margin-top:8px"><input id="e-datecreate" placeholder="派單日 YYYY/MM/DD"></div>
+      <div style="margin-top:8px"><input id="e-fengbian" placeholder="封邊"></div>
+      <div style="margin-top:8px"><input id="e-wallpaper" placeholder="面飾"></div>
+      <div style="margin-top:8px"><input id="e-jobdesc" placeholder="作業內容"></div>
+
+      <div style="margin-top:12px"><button class="btn" onclick="submitEditOrder()">Save</button></div>
+    </div>
+  </div>
 
 
   <!-- Add Task Modal -->
