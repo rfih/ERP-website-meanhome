@@ -6,7 +6,7 @@ from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 import warnings
-from sqlalchemy import text
+from sqlalchemy import text, or_
 import re, unicodedata
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -58,8 +58,10 @@ def order_progress(order):
 
 @app.route("/")
 def home():
+    today = utcnow().date().isoformat()
     with SessionLocal() as session:
-        orders = session.query(Order).order_by(Order.id.desc()).all()
+        q = session.query(Order).filter(or_(Order.archived == False, Order.archived.is_(None)))
+        orders = q.order_by(Order.id.desc()).all()
         today = datetime.today().strftime("%Y/%m/%d")
         # Build a light-weight view model for template simplicity
         vm = []
@@ -92,7 +94,45 @@ def home():
                     } for t in o.tasks
                 ]
             })
-        return render_template("index.html", orders=vm, today_date=today)
+        return render_template("index.html", orders=vm, today_date=today, archived_page=False)
+    
+@app.route("/archived")
+def archived_page():
+    today = utcnow().date().isoformat()
+    with SessionLocal() as session:
+        orders = (session.query(Order)
+                  .filter(Order.archived == True)
+                  .order_by(Order.id.desc())
+                  .all())
+
+        vm = []
+        for o in orders:
+            done_q, total_q = order_progress(o)
+            vm.append({
+                "id": o.id,
+                "manufacture_code": o.manufacture_code,
+                "customer": o.customer,
+                "product": o.product,
+                "demand_date": o.demand_date,
+                "delivery": o.delivery,
+                "quantity": o.quantity,
+                "datecreate": o.datecreate,
+                "fengbian": o.fengbian,
+                "wallpaper": o.wallpaper,
+                "jobdesc": o.jobdesc,
+                "progress": (done_q, total_q),
+                "groups": recalc_active_groups(o),
+                "tasks": [{
+                    "id": t.id,
+                    "group": t.group,
+                    "task": t.task,
+                    "quantity": t.quantity,
+                    "completed": t.completed or 0,
+                    "running": bool(getattr(t, "start_time", None) and not getattr(t, "stop_time", None)),
+                    "started_at": (t.start_time.isoformat() if getattr(t, "start_time", None) else None),
+                } for t in o.tasks]
+            })
+        return render_template("index.html", orders=vm, today_date=today, archived_page=True)
 
 @app.route("/add_order", methods=["POST"])
 def add_order():
@@ -258,24 +298,46 @@ def delete_order():
 @app.route("/update_order", methods=["POST"])
 def update_order():
     data = request.get_json()
+    oid = int(data.get("order_id", 0))
+    if not oid:
+        return jsonify(success=False, message="order_id 缺少"), 400
+
     with SessionLocal() as session:
-        o = session.get(Order, int(data["order_id"]))
+        o = session.get(Order, oid)
         if not o:
             return jsonify(success=False, message="Order not found"), 404
-        # Save all editable fields
-        o.manufacture_code = data.get("manufacture_code", o.manufacture_code)
-        o.customer = data.get("customer", o.customer)
-        o.product = data.get("product", o.product)
-        o.demand_date = data.get("demand_date", o.demand_date)
-        o.delivery = data.get("delivery", o.delivery)
-        o.quantity = int(data.get("quantity", o.quantity or 0))
-        o.datecreate = data.get("datecreate", o.datecreate)
-        o.fengbian = data.get("fengbian", o.fengbian)
-        o.wallpaper = data.get("wallpaper", o.wallpaper)
-        o.jobdesc = data.get("jobdesc", o.jobdesc)
-        o.updated_at = datetime.utcnow()
+
+        # update fields
+        o.manufacture_code = data.get("manufacture_code") or ""
+        o.customer = data.get("customer") or ""
+        o.product = data.get("product") or ""
+        o.demand_date = data.get("demand_date") or ""
+        o.delivery = data.get("delivery") or ""
+        try:
+            o.quantity = int(data.get("quantity") or 0)
+        except Exception:
+            o.quantity = 0
+        o.datecreate = data.get("datecreate") or ""
+        o.fengbian = data.get("fengbian") or ""
+        o.wallpaper = data.get("wallpaper") or ""
+        o.jobdesc = data.get("jobdesc") or ""
+
         session.commit()
-        return jsonify(success=True)
+
+        # send updated object back
+        return jsonify(success=True, order={
+            "id": o.id,
+            "manufacture_code": o.manufacture_code,
+            "customer": o.customer,
+            "product": o.product,
+            "demand_date": o.demand_date,
+            "delivery": o.delivery,
+            "quantity": o.quantity,
+            "datecreate": o.datecreate,
+            "fengbian": o.fengbian,
+            "wallpaper": o.wallpaper,
+            "jobdesc": o.jobdesc,
+        })
     
 @app.route("/update_task_info", methods=["POST"])
 def update_task_info():
@@ -522,6 +584,29 @@ def import_orders():
         s.commit()
 
     return jsonify(success=True, created=created, sheet=sheet_name or ws.title)
+
+def ensure_archive_cols():
+    with engine.connect() as c:
+        cols = [r[1] for r in c.execute(text("PRAGMA table_info(orders)")).fetchall()]
+        if "archived" not in cols:
+            c.execute(text("ALTER TABLE orders ADD COLUMN archived INTEGER DEFAULT 0"))
+        if "archived_at" not in cols:
+            c.execute(text("ALTER TABLE orders ADD COLUMN archived_at TEXT"))
+ensure_archive_cols()
+
+@app.route("/archive_order", methods=["POST"])
+def archive_order():
+    data = request.get_json()
+    oid = int(data.get("order_id", 0))
+    do_archive = bool(data.get("archive", True))
+    with SessionLocal() as s:
+        o = s.get(Order, oid)
+        if not o:
+            return jsonify(success=False, message="Order not found"), 404
+        o.archived = do_archive
+        o.archived_at = datetime.now(timezone.utc) if do_archive else None
+        s.commit()
+        return jsonify(success=True, archived=o.archived)
 
 if __name__ == "__main__":
     app.run(debug=True)

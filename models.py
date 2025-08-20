@@ -1,7 +1,7 @@
 # models.py
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey
+    Column, Integer, String, Text, DateTime, ForeignKey, Boolean, DateTime
 )
 from sqlalchemy.orm import relationship
 from db import Base  # Base, engine, SessionLocal live in db.py
@@ -24,6 +24,8 @@ class Order(Base):
     fengbian        = Column(String)
     wallpaper       = Column(String)
     jobdesc         = Column(Text)
+    archived    = Column(Boolean, default=False)   # soft archive flag
+    archived_at = Column(DateTime)                 # when it was archived
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime)

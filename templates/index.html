@@ -89,9 +89,15 @@
   <script defer src="/static/main.js"></script>
 </head>
 <body>
-  <h1>Live Order Status (Starter)</h1>
-  <button class="btn" onclick="openModal('modal-order')">Add Order</button>
-  <p>Today {{ today_date }}</p>
+  <h1>Live Order Status</h1>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+    <a href="/" class="btn {{ '' if archived_page else 'blue' }}">Active</a>
+    <a href="/archived" class="btn {{ 'blue' if archived_page else '' }}">Archived</a>
+      {% if not archived_page %}
+        <button class="btn" onclick="openModal('modal-order')">Add Order</button>
+        <p>Today {{ today_date }}</p>
+      {% endif %}
+  </div>
 
   <table>
     <tr>
@@ -140,9 +146,15 @@
       <td>{{ o.jobdesc }}</td>
       <td id="groups-{{o.id}}">{{ o.active_groups }}</td>
       <td>
-        <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
-        <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
-        <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+        {% if archived_page == False %}
+          <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
+          <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
+          <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+          <button class="btn gray" onclick="archiveOrder({{ o.id }})">Archive</button>
+        {% else %}
+          <button class="btn gray" onclick="restoreOrder({{ o.id }})">Restore</button>
+          <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+        {% endif %}
       </td>
     </tr>
 

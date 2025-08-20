@@ -639,3 +639,32 @@ function applyOrderRowUpdate(orderId, o){
   // if quantity changed and you want to recompute order progress:
   try { updateOrderProgress(orderId); } catch(e){}
 }
+
+function archiveOrder(orderId){
+  if(!confirm('Archive this order?')) return;
+  fetch('/archive_order', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ order_id: orderId, archive: true })
+  })
+  .then(r=>r.json()).then(j=>{
+    if(j.success){
+      const row = document.getElementById('order-'+orderId);
+      if(row) row.remove();
+      toast('已封存');
+    } else alert(j.message||'封存失敗');
+  }).catch(()=> alert('封存失敗'));
+}
+
+function restoreOrder(orderId){
+  fetch('/archive_order', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ order_id: orderId, archive: false })
+  })
+  .then(r=>r.json()).then(j=>{
+    if(j.success){
+      const row = document.getElementById('order-'+orderId);
+      if(row) row.remove();
+      toast('已還原（回到 Active）');
+    } else alert(j.message||'還原失敗');
+  }).catch(()=> alert('還原失敗'));
+}
