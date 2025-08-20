@@ -85,140 +85,336 @@
       border-bottom: 1px solid #e9ecef;
       border-radius: 6px;
     }
+
+    /* Toolbar and search layout */
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+    .toolbar .left,.toolbar .right{display:flex;align-items:center;gap:8px}
+    .search-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      background:#fff;padding:10px 12px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.05);margin:8px 0 12px}
+    .search-card input[type="text"]{min-width:160px;padding:6px 10px}
+    .search-card select{padding:6px 10px}
+    .search-card input[type="date"]{min-width:160px;padding:6px 10px}
+    .search-card .counter{margin-left:auto;color:#6c757d;font-size:12px}
+
+    /* ===== Sidebar layout ===== */
+    .layout{display:flex; min-height:100vh}
+
+    /* Sidebar = only search/menu */
+    .sidebar{
+      width:280px; background:#fff; border-right:1px solid #e9ecef;
+      padding:14px; position:sticky; top:0; height:calc(100vh - 40px); overflow:auto;
+    }
+
+    /* Main content (toolbar + table) */
+    .content{flex:1; padding:0 16px}
+
+    /* Sidebar widgets */
+    .brand{font-weight:700; font-size:18px; margin-bottom:10px}
+    .sbm{margin-top:10px; display:grid; grid-template-columns:1fr; gap:8px}
+    .sbm input[type="text"], .sbm select, .sbm input[type="date"]{padding:6px 10px; width:100%}
+    .sbm .row{display:flex; gap:8px}
+    .sbm .caption{color:#6c757d; font-size:12px}
+
+    /* Mobile: collapse the sidebar */
+    .hamburger{display:none}
+    @media (max-width: 900px){
+      .sidebar{
+        position:fixed; left:-300px; top:0; height:100vh; z-index:20;
+        transition:left .2s ease-in-out;
+      }
+      .sidebar.open{left:0}
+      .overlay{display:none}
+      .overlay.show{display:block; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:15}
+      .hamburger{display:inline-flex; position:sticky; top:10px; margin-bottom:10px}
+    }
+    /* Smooth transition */
+    .sidebar{ transition: left .2s ease, width .2s ease }
+
+    /* Show the ☰ button on all screen sizes */
+    .hamburger{ display:inline-flex; position:sticky; top:10px; margin-bottom:10px }
+
+    /* Desktop collapse */
+    body.sb-collapsed .sidebar{ width:0; padding:0; border:0; overflow:hidden }
+    body.sb-collapsed .content{ padding-left:16px }
+
+    /* --- minimal layout safety (no visual changes) --- */
+    .layout{ display:flex; }
+    .sidebar{ flex:0 0 280px; position:sticky; top:20px; height:calc(100vh - 40px); overflow:auto; }
+    .content{ flex:1; min-width:0; } /* prevents table width from pushing under sidebar */
+
+    /* Mobile sidebar slide-in (keeps your current look) */
+    @media (max-width:900px){
+      .sidebar{ position:fixed; left:-300px; top:0; height:100vh; z-index:20; transition:left .2s; }
+      .sidebar.open{ left:0; }
+      .overlay{ display:none; }
+      .overlay.show{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:15; }
+    }
+    /* Collapsible sidebar (desktop + mobile) */
+    .sidebar{ transition: left .2s ease, width .2s ease, padding .2s ease; }
+
+    /* Desktop collapse: shrink the sidebar column */
+    @media (min-width:901px){
+      body.sb-collapsed .sidebar{
+        width:0 !important; padding:0; border:0; overflow:hidden;
+      }
+      body.sb-collapsed .content{ padding-left:0; }
+    }
+
+    /* Mobile off-canvas (keep your current behavior) */
+    @media (max-width:900px){
+      .sidebar{
+        position:fixed; left:-300px; top:0; height:100vh; z-index:20;
+        transition:left .2s ease-in-out;
+      }
+      .sidebar.open{ left:0; }
+      .overlay{ display:none; }
+      .overlay.show{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:15; }
+    }
+
+    /* Make sure the Menu button is visible on ALL sizes */
+    .hamburger{ display:inline-flex; align-items:center; gap:6px; position:sticky; top:10px; margin-bottom:10px; z-index:6; }
+
+    @media (min-width:901px){
+      body.sb-collapsed .sidebar{
+        /* kill the flex-basis that keeps 280px reserved */
+        flex: 0 0 0 !important;
+        flex-basis: 0 !important;
+
+        width: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+      }
+      body.sb-collapsed .content{
+        padding-left: 0 !important;  /* let content expand fully */
+      }
+    }
+
+    /* Sidebar a bit narrower */
+    .sidebar{ flex:0 0 240px; }
+
+    /* Compact search controls */
+    .brand{ font-size:16px; margin:0 0 6px; }          /* smaller "Search" title */
+    .sidebar{ padding:12px; }                           /* tighter padding */
+    .sbm{ gap:6px; }                                    /* smaller gaps */
+    .sbm input[type="text"],
+    .sbm select,
+    .sbm input[type="date"]{
+      padding:4px 8px;                                  /* thinner controls */
+      font-size:13px;
+      height:32px;                                      /* shorter height */
+    }
+    .sbm .row{ gap:6px; }
+
+    /* Space between Menu button and page title */
+    .hamburger{ margin-right:12px; }
+
+    /* (optional) a touch more room on the content side */
+    .content{ padding-left:12px; }
+
+    /* shrink the top search box only */
+    #search-q{
+      width: 225px;          /* <- adjust to taste (e.g., 180 / 220) */
+      height: 32px;
+      padding: 4px 8px;
+      font-size: 13px;
+    }
+
+    /* match the other controls to the same height (optional) */
+    .sbm select,
+    .sbm input[type="date"]{ height:32px; }
+
+    /* on mobile, let it go full width again (optional) */
+    @media (max-width:900px){
+      #search-q{ width:100%; }
+    }
   </style>
   <script defer src="/static/main.js"></script>
 </head>
 <body>
+  <div class="layout">
+  <!-- Sidebar: search + future menu -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">Search</div>
+
+    <!-- Search form (GET) -->
+    <form method="get" action="{{ '/archived' if archived_page else '/' }}" class="sbm">
+      <input type="text" name="q" id= "search-q" value="{{ qtext or '' }}"
+             placeholder="搜尋：">
+
+      <select name="dfield">
+        <option value="any"        {{ 'selected' if (dfield or 'any')=='any' }}>全部日期欄位</option>
+        <option value="demand"     {{ 'selected' if dfield=='demand' }}>客戶交期</option>
+        <option value="delivery"   {{ 'selected' if dfield=='delivery' }}>預計出貨</option>
+        <option value="datecreate" {{ 'selected' if dfield=='datecreate' }}>派單日</option>
+      </select>
+
+      <div class="row">
+        <input type="date" name="dfrom" value="{{ dfrom or '' }}">
+        <input type="date" name="dto"   value="{{ dto or '' }}">
+      </div>
+
+      <div class="row">
+        <button class="btn" type="submit">Search</button>
+        {% if qtext or dfrom or dto %}
+          <a class="btn gray" href="{{ '/archived' if archived_page else '/' }}">Clear</a>
+        {% endif %}
+      </div>
+
+      <div class="caption">共 {{ orders|length }} 筆{% if qtext or dfrom or dto %}（篩選中）{% endif %}</div>
+
+      <hr style="margin:12px 0">
+
+      <!-- future: put more page menus here -->
+      <!-- <a class="btn full gray" href="/reports">Reports</a> -->
+    </form>
+  </aside>
+  <main class="content">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button class="btn hamburger" onclick="toggleSidebar()">☰ Menu</button>
+  </div>
   <h1>Live Order Status</h1>
-  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
-    <a href="/" class="btn {{ '' if archived_page else 'blue' }}">Active</a>
-    <a href="/archived" class="btn {{ 'blue' if archived_page else '' }}">Archived</a>
+  <!-- Top toolbar -->
+  <div class="toolbar">
+    <div class="left">
+      <a href="/" class="btn {{ '' if archived_page else 'blue' }}">Active</a>
+      <a href="/archived" class="btn {{ 'blue' if archived_page else '' }}">Archived</a>
       {% if not archived_page %}
         <button class="btn" onclick="openModal('modal-order')">Add Order</button>
-        <p>Today {{ today_date }}</p>
       {% endif %}
+    </div>
+    <div class="right">
+      <button class="btn" onclick="location.href='/export/orders.xlsx'">Export Excel</button>
+      <button class="btn gray" onclick="openModal('modal-import')">Import Excel</button>
+      <span style="color:#6c757d">Today {{ today_date }}</span>
+    </div>
+  </div>
+  <!-- Content -->
+      <table>
+      <tr>
+        <th>Progress</th>
+        <th>客戶交期</th>
+        <th>預計出貨</th>
+        <th>製令號碼</th>
+        <th>專案名稱</th>
+        <th>產品名稱</th>
+        <th>數量</th>
+        <th>派單日</th>
+        <th>封邊</th>
+        <th>面飾</th>
+        <th>作業內容</th>
+        <th>現場組別</th>
+        <th>Actions</th>
+      </tr>
+      {% for o in orders %}
+      <tr id="order-{{o.id}}"
+        data-demand="{{ o.demand_date|e }}"
+        data-delivery="{{ o.delivery|e }}"
+        data-code="{{ o.manufacture_code|e }}"
+        data-customer="{{ o.customer|e }}"
+        data-product="{{ o.product|e }}"
+        data-qty="{{ o.quantity }}"
+        data-datecreate="{{ o.datecreate|e }}"
+        data-fengbian="{{ o.fengbian|e }}"
+        data-wallpaper="{{ o.wallpaper|e }}"
+        data-jobdesc="{{ o.jobdesc|e }}">
+        <td>
+          {% set done = o.progress[0] %}
+          {% set total = o.progress[1] if o.progress[1] else 1 %}
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: {{ (done/total)*100 }}%"></div>
+          </div>
+        </td>
+        <td>{{ o.demand_date }}</td>
+        <td>{{ o.delivery }}</td>
+        <td>{{ o.manufacture_code }}</td>
+        <td>{{ o.customer }}</td>
+        <td>{{ o.product }}</td>
+        <td>{{ o.quantity }}</td>
+        <td>{{ o.datecreate }}</td>
+        <td>{{ o.fengbian }}</td>
+        <td>{{ o.wallpaper }}</td>
+        <td>{{ o.jobdesc }}</td>
+        <td id="groups-{{o.id}}">{{ o.active_groups }}</td>
+        <td>
+          {% if archived_page == False %}
+            <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
+            <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
+            <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+            <button class="btn gray" onclick="archiveOrder({{ o.id }})">Archive</button>
+          {% else %}
+            <button class="btn gray" onclick="restoreOrder({{ o.id }})">Restore</button>
+            <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+          {% endif %}
+        </td>
+      </tr>
+
+      <tr>
+        <td colspan="13" style="padding:0; border:0">
+          <table style="width:100%; border-collapse:collapse">
+            <tbody id="details-{{ o.id }}" style="display:none">
+              <tr>
+                <th>Progress</th>
+                <th>組別</th>
+                <th>數量</th>
+                <th>工作內容</th>
+                <th>已完成</th>
+                <th>剩下</th>
+                <th>Actions</th>
+              </tr>
+              {% for t in o.sub_tasks %}
+              <tr id="task-{{ t.id }}" data-qty="{{ t.quantity }}" data-order="{{ o.id }}">
+                <td>
+                  {% set ttot = t.quantity if t.quantity else 1 %}
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ (t.completed / ttot) * 100 }}%"></div>
+                  </div>
+                  <div class="task-status {{ 'running' if t.running else '' }}">
+                    <span class="dot"></span>
+                    <span>
+                      {{ 'Running' if t.running else 'Idle' }}
+                      {% if t.running and t.started_at %}
+                        <span style="opacity:.7">• since {{ t.started_at[:19].replace('T',' ') }}</span>
+                      {% endif %}
+                    </span>
+                  </div>
+                </td>
+                <td>{{ t.group }}</td>
+                <td class="qty">{{ t.quantity }}</td>
+                <td class="name">{{ t.task }}</td>
+                <td>{{ t.quantity }}</td>
+                <td>{{ t.task }}</td>
+                <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
+                <td class="remaining">{{ t.remaining }}</td>
+                <td>
+                  <button type="button" class="btn gray" onclick="startTask({{ t.id }})" {{ 'disabled' if t.running else '' }}>Start</button>
+                  <button type="button" class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
+                  <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
+                  <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
+                  <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
+                  <button type="button" class="btn gray" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
+                </td>
+              </tr>
+              {% endfor %}
+              <tr>
+                <td colspan="7"><button class="btn" onclick="openTaskModal({{ o.id }})">+ Add Task</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      {% if not loop.last %}
+      <tr class="order-gap"><td colspan="13" aria-hidden="true"></td></tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+  </main>
   </div>
 
-  <table>
-    <tr>
-      <th>Progress</th>
-      <th>客戶交期</th>
-      <th>預計出貨</th>
-      <th>製令號碼</th>
-      <th>專案名稱</th>
-      <th>產品名稱</th>
-      <th>數量</th>
-      <th>派單日</th>
-      <th>封邊</th>
-      <th>面飾</th>
-      <th>作業內容</th>
-      <th>現場組別</th>
-      <th>Actions</th>
-    </tr>
-    {% for o in orders %}
-    <tr id="order-{{o.id}}"
-      data-demand="{{ o.demand_date|e }}"
-      data-delivery="{{ o.delivery|e }}"
-      data-code="{{ o.manufacture_code|e }}"
-      data-customer="{{ o.customer|e }}"
-      data-product="{{ o.product|e }}"
-      data-qty="{{ o.quantity }}"
-      data-datecreate="{{ o.datecreate|e }}"
-      data-fengbian="{{ o.fengbian|e }}"
-      data-wallpaper="{{ o.wallpaper|e }}"
-      data-jobdesc="{{ o.jobdesc|e }}">
-      <td>
-        {% set done = o.progress[0] %}
-        {% set total = o.progress[1] if o.progress[1] else 1 %}
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: {{ (done/total)*100 }}%"></div>
-        </div>
-      </td>
-      <td>{{ o.demand_date }}</td>
-      <td>{{ o.delivery }}</td>
-      <td>{{ o.manufacture_code }}</td>
-      <td>{{ o.customer }}</td>
-      <td>{{ o.product }}</td>
-      <td>{{ o.quantity }}</td>
-      <td>{{ o.datecreate }}</td>
-      <td>{{ o.fengbian }}</td>
-      <td>{{ o.wallpaper }}</td>
-      <td>{{ o.jobdesc }}</td>
-      <td id="groups-{{o.id}}">{{ o.active_groups }}</td>
-      <td>
-        {% if archived_page == False %}
-          <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
-          <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
-          <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
-          <button class="btn gray" onclick="archiveOrder({{ o.id }})">Archive</button>
-        {% else %}
-          <button class="btn gray" onclick="restoreOrder({{ o.id }})">Restore</button>
-          <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
-        {% endif %}
-      </td>
-    </tr>
-
-    <tr>
-      <td colspan="13" style="padding:0; border:0">
-        <table style="width:100%; border-collapse:collapse">
-          <tbody id="details-{{ o.id }}" style="display:none">
-            <tr>
-              <th>Progress</th>
-              <th>組別</th>
-              <th>數量</th>
-              <th>工作內容</th>
-              <th>已完成</th>
-              <th>剩下</th>
-              <th>Actions</th>
-            </tr>
-            {% for t in o.sub_tasks %}
-            <tr id="task-{{ t.id }}" data-qty="{{ t.quantity }}" data-order="{{ o.id }}">
-              <td>
-                {% set ttot = t.quantity if t.quantity else 1 %}
-                <div class="progress-bar">
-                  <div class="progress-fill" style="width: {{ (t.completed / ttot) * 100 }}%"></div>
-                </div>
-                <div class="task-status {{ 'running' if t.running else '' }}">
-                  <span class="dot"></span>
-                  <span>
-                    {{ 'Running' if t.running else 'Idle' }}
-                    {% if t.running and t.started_at %}
-                      <span style="opacity:.7">• since {{ t.started_at[:19].replace('T',' ') }}</span>
-                    {% endif %}
-                  </span>
-                </div>
-              </td>
-              <td>{{ t.group }}</td>
-              <td class="qty">{{ t.quantity }}</td>
-              <td class="name">{{ t.task }}</td>
-              <td>{{ t.quantity }}</td>
-              <td>{{ t.task }}</td>
-              <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
-              <td class="remaining">{{ t.remaining }}</td>
-              <td>
-                <button type="button" class="btn gray" onclick="startTask({{ t.id }})" {{ 'disabled' if t.running else '' }}>Start</button>
-                <button type="button" class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
-                <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
-                <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
-                <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
-                <button type="button" class="btn gray" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
-              </td>
-            </tr>
-            {% endfor %}
-            <tr>
-              <td colspan="7"><button class="btn" onclick="openTaskModal({{ o.id }})">+ Add Task</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </td>
-    </tr>
-    {% if not loop.last %}
-    <tr class="order-gap"><td colspan="13" aria-hidden="true"></td></tr>
-    {% endif %}
-    {% endfor %}
-  <!-- Import Modal -->
-  <button class="btn" onclick="location.href='/export/orders.xlsx'">Export Excel</button>
-  <button class="btn gray" onclick="openModal('modal-import')">Import Excel</button>
+  <!-- Mobile overlay -->
+  <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+      <!-- Import Modal -->
   <div id="modal-import" class="modal" onclick="if(event.target===this) closeModal('modal-import')">
     <div class="panel">
       <h3 style="margin:0">Import Orders (Excel .xlsx)</h3>

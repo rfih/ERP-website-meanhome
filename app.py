@@ -6,7 +6,7 @@ from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 import warnings
-from sqlalchemy import text, or_
+from sqlalchemy import and_, text, or_, func
 import re, unicodedata
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -58,12 +58,66 @@ def order_progress(order):
 
 @app.route("/")
 def home():
-    today = utcnow().date().isoformat()
+    qtext = (request.args.get("q") or "").strip()
+    dfield = (request.args.get("dfield") or "any").strip()   # any | demand | delivery | datecreate
+    dfrom  = (request.args.get("dfrom")  or "").strip()
+    dto    = (request.args.get("dto")    or "").strip()
+
+    df = _ymd_digits(dfrom)
+    dt = _ymd_digits(dto)
+    if df and not dt:
+        dt = df  # single-day filter if only start is provided
+
+    def norm_col(col):
+        # turn 'YYYY/MM/DD' or 'YYYY-MM-DD' into 'YYYYMMDD' on the SQL side
+        return func.replace(func.replace(col, '-', ''), '/', '')
+
+    def date_cond_for(col):
+        c = norm_col(col)
+        preds = []
+        if df: preds.append(c >= df)
+        if dt: preds.append(c <= dt)
+        return and_(*preds) if preds else None
+    today = datetime.today().strftime("%Y/%m/%d")
     with SessionLocal() as session:
-        q = session.query(Order).filter(or_(Order.archived == False, Order.archived.is_(None)))
+        q = (session.query(Order)
+             .filter(or_(Order.archived == False, Order.archived.is_(None))))
+
+        if qtext:
+            kw = f"%{qtext}%"
+            q = (q.outerjoin(Task)
+                   .filter(or_(
+                       Order.manufacture_code.ilike(kw),
+                       Order.customer.ilike(kw),
+                       Order.product.ilike(kw),
+                       Order.jobdesc.ilike(kw),
+                       Task.task.ilike(kw),
+                       Task.group.ilike(kw)
+                   ))
+                   .distinct())
+        
+        # date filter (NEW)
+        if df or dt:
+            if dfield == "demand":
+                cond = date_cond_for(Order.demand_date)
+                if cond is not None: q = q.filter(cond)
+            elif dfield == "delivery":
+                cond = date_cond_for(Order.delivery)
+                if cond is not None: q = q.filter(cond)
+            elif dfield == "datecreate":
+                cond = date_cond_for(Order.datecreate)
+                if cond is not None: q = q.filter(cond)
+            else:  # any
+                conds = [c for c in [
+                    date_cond_for(Order.demand_date),
+                    date_cond_for(Order.delivery),
+                    date_cond_for(Order.datecreate),
+                ] if c is not None]
+                if conds:
+                    q = q.filter(or_(*conds))
+
         orders = q.order_by(Order.id.desc()).all()
-        today = datetime.today().strftime("%Y/%m/%d")
-        # Build a light-weight view model for template simplicity
+
         vm = []
         for o in orders:
             done_q, total_q = order_progress(o)
@@ -94,45 +148,102 @@ def home():
                     } for t in o.tasks
                 ]
             })
-        return render_template("index.html", orders=vm, today_date=today, archived_page=False)
+        return render_template("index.html", orders=vm, today_date=today, archived_page=False, qtext=qtext)
     
 @app.route("/archived")
 def archived_page():
-    today = utcnow().date().isoformat()
+    qtext = (request.args.get("q") or "").strip()
+    dfield = (request.args.get("dfield") or "any").strip()   # any | demand | delivery | datecreate
+    dfrom  = (request.args.get("dfrom")  or "").strip()
+    dto    = (request.args.get("dto")    or "").strip()
+
+    df = _ymd_digits(dfrom)
+    dt = _ymd_digits(dto)
+    if df and not dt:
+        dt = df  # single-day filter if only start is provided
+
+    def norm_col(col):
+        # turn 'YYYY/MM/DD' or 'YYYY-MM-DD' into 'YYYYMMDD' on the SQL side
+        return func.replace(func.replace(col, '-', ''), '/', '')
+
+    def date_cond_for(col):
+        c = norm_col(col)
+        preds = []
+        if df: preds.append(c >= df)
+        if dt: preds.append(c <= dt)
+        return and_(*preds) if preds else None
+    today = datetime.today().strftime("%Y/%m/%d")
     with SessionLocal() as session:
-        orders = (session.query(Order)
-                  .filter(Order.archived == True)
-                  .order_by(Order.id.desc())
-                  .all())
+        q = session.query(Order).filter(Order.archived == True)
+
+        if qtext:
+            kw = f"%{qtext}%"
+            q = (q.outerjoin(Task)
+                   .filter(or_(
+                       Order.manufacture_code.ilike(kw),
+                       Order.customer.ilike(kw),
+                       Order.product.ilike(kw),
+                       Order.jobdesc.ilike(kw),
+                       Task.task.ilike(kw),
+                       Task.group.ilike(kw)
+                   ))
+                   .distinct())
+            
+        # date filter (NEW)
+        if df or dt:
+            if dfield == "demand":
+                cond = date_cond_for(Order.demand_date)
+                if cond is not None: q = q.filter(cond)
+            elif dfield == "delivery":
+                cond = date_cond_for(Order.delivery)
+                if cond is not None: q = q.filter(cond)
+            elif dfield == "datecreate":
+                cond = date_cond_for(Order.datecreate)
+                if cond is not None: q = q.filter(cond)
+            else:  # any
+                conds = [c for c in [
+                    date_cond_for(Order.demand_date),
+                    date_cond_for(Order.delivery),
+                    date_cond_for(Order.datecreate),
+                ] if c is not None]
+                if conds:
+                    q = q.filter(or_(*conds))
+
+
+        orders = q.order_by(Order.id.desc()).all()
 
         vm = []
         for o in orders:
             done_q, total_q = order_progress(o)
             vm.append({
                 "id": o.id,
-                "manufacture_code": o.manufacture_code,
-                "customer": o.customer,
-                "product": o.product,
-                "demand_date": o.demand_date,
-                "delivery": o.delivery,
-                "quantity": o.quantity,
-                "datecreate": o.datecreate,
-                "fengbian": o.fengbian,
-                "wallpaper": o.wallpaper,
-                "jobdesc": o.jobdesc,
+                "manufacture_code": o.manufacture_code or "",
+                "customer": o.customer or "",
+                "product": o.product or "",
+                "demand_date": o.demand_date or "",
+                "delivery": o.delivery or "",
+                "quantity": o.quantity or 0,
+                "datecreate": o.datecreate or "",
+                "fengbian": o.fengbian or "",
+                "wallpaper": o.wallpaper or "",
+                "jobdesc": o.jobdesc or "",
+                "active_groups": ", ".join(recalc_active_groups(o)),
                 "progress": (done_q, total_q),
-                "groups": recalc_active_groups(o),
-                "tasks": [{
-                    "id": t.id,
-                    "group": t.group,
-                    "task": t.task,
-                    "quantity": t.quantity,
-                    "completed": t.completed or 0,
-                    "running": bool(getattr(t, "start_time", None) and not getattr(t, "stop_time", None)),
-                    "started_at": (t.start_time.isoformat() if getattr(t, "start_time", None) else None),
-                } for t in o.tasks]
+                "sub_tasks": [
+                    {
+                        "id": t.id,
+                        "group": t.group or "",
+                        "task": t.task or "",
+                        "quantity": t.quantity or 0,
+                        "completed": t.completed or 0,
+                        "remaining": max(0, (t.quantity or 0) - (t.completed or 0)),
+                        "running": bool(getattr(t, "start_time", None) and not getattr(t, "stop_time", None)),
+                        "started_at": (t.start_time.isoformat() if getattr(t, "start_time", None) else None),
+                    } for t in o.tasks
+                ]
             })
-        return render_template("index.html", orders=vm, today_date=today, archived_page=True)
+        return render_template("index.html", orders=vm, today_date=today, archived_page=True, qtext=qtext, dfield=dfield, dfrom=dfrom, dto=dto)
+
 
 @app.route("/add_order", methods=["POST"])
 def add_order():
@@ -607,6 +718,11 @@ def archive_order():
         o.archived_at = datetime.now(timezone.utc) if do_archive else None
         s.commit()
         return jsonify(success=True, archived=o.archived)
+    
+def _ymd_digits(s: str) -> str:
+    """Keep only digits, e.g. '2025-08-20' or '2025/8/2' -> '20250820' (no zero-pad for month/day if user typed that, but ok)."""
+    if not s: return ""
+    return re.sub(r"\D", "", s)
 
 if __name__ == "__main__":
     app.run(debug=True)

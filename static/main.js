@@ -668,3 +668,41 @@ function restoreOrder(orderId){
     } else alert(j.message||'還原失敗');
   }).catch(()=> alert('還原失敗'));
 }
+
+function toggleSidebar(){
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('overlay');
+  const isMobile = window.matchMedia('(max-width: 900px)').matches;
+
+  if (isMobile) {
+    const open = sb.classList.toggle('open');
+    if (ov) ov.classList.toggle('show', open);
+  } else {
+    document.body.classList.toggle('sb-collapsed');
+    // remember state across refresh
+    try {
+      localStorage.setItem('sbCollapsed', document.body.classList.contains('sb-collapsed') ? '1' : '0');
+    } catch(e){}
+  }
+}
+
+// keep desktop/mobile states tidy when resizing
+window.addEventListener('resize', () => {
+  const isMobile = window.matchMedia('(max-width: 900px)').matches;
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('overlay');
+
+  if (!isMobile) { // leaving mobile → desktop
+    sb.classList.remove('open');
+    if (ov) ov.classList.remove('show');
+  }
+});
+
+// restore desktop collapse preference on load
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (localStorage.getItem('sbCollapsed') === '1') {
+      document.body.classList.add('sb-collapsed');
+    }
+  } catch(e){}
+});
