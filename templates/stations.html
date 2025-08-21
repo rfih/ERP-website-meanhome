@@ -165,7 +165,18 @@
         margin: 10mm;
       }
     }
-    
+
+    .progress{ width:120px; height:10px; background:#edf2f7; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0 }
+    .progress-fill{ height:100%; width:0; background:#0d6efd; transition:width .2s ease }
+    .progress-fill.running{
+      background: repeating-linear-gradient(45deg, #0d6efd, #0d6efd 10px, #5aa2ff 10px, #5aa2ff 20px);
+      animation: move 1s linear infinite;
+    }
+    @keyframes move{ from{background-position:0 0} to{background-position:40px 0} }
+    .task-status{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#6c757d }
+    .task-status .dot{ width:8px; height:8px; border-radius:50%; background:#adb5bd }
+    .task-status.running .dot{ background:#28a745; box-shadow:0 0 0 0 rgba(40,167,69,.4); animation:pulse 1.4s infinite }
+    @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(40,167,69,.4)} 70%{box-shadow:0 0 0 8px rgba(40,167,69,0)} 100%{box-shadow:0 0 0 0 rgba(40,167,69,0)} }    
   </style>
   <script>
     function updateTask(taskId, orderId) {
@@ -374,9 +385,9 @@
   </thead>
   <tbody>
     {% for item in tasks %}
-    <tr>
+    <tr id="task-{{ item.task.id }}">
       <td>
-        <div class="progress-bar" id="task-progress-{{ item.task.id }}-{{ item.order.id }}">
+        <div class="progress-bar">
           <div class="progress-fill" style="width: {{ (item.task.completed / item.task.quantity) * 100 }}%"></div>
         </div>
       </td>
@@ -396,13 +407,29 @@
       <td id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">{{ item.task.quantity - item.task.completed }}</td>
       <td id="last-update-{{ item.task.id }}-{{ item.order.id }}">
         {% if item.task.history %}
-          {{ item.task.history[-1].timestamp.split(' ')[0] }} (+{{ item.task.history[-1].delta }})
+          {# pick the last history row if it exists #}
+          {% set last = item.task.history|last if item.task.history else None %}
+
+          {% if last and last.timestamp %}
+            {% if last.timestamp is string %}
+              {{ last.timestamp.split(' ')[0] }}
+            {% else %}
+              {{ last.timestamp.strftime('%Y/%m/%d') }}
+            {% endif %}
+            {% if last.delta is not none %} (+{{ last.delta }}){% endif %}
+          {% else %}
+            -
+          {% endif %}
         {% else %}-{% endif %}
       </td>
       <td>
-        <button onclick="updateTask({{ item.task.id }}, {{ item.order.id }})">Update</button>
-        <button onclick="showTaskHistory({{ item.task.id }}, {{ item.order.id }})">History</button>
-        <button onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})" style="background:red;">Delete</button> 
+        <div class="task-status"><span class="dot"></span><span>Idle</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+          <button class="btn" onclick="startTask({{ item.task.id }})">Start</button>
+          <button class="btn" onclick="stopTask({{ item.task.id }})">Stop</button>
+          <button class="btn gray" onclick="showHistory({{ item.task.id }})">History</button>
+          <button class="btn red" onclick="finishTask({{ item.task.id }})">Finish</button>
+        </div>
       </td>
       <td class="print-only"></td>
       <td class="print-only"></td>
@@ -417,6 +444,16 @@
   <h3>Update History</h3>
   <ul id="historyContent"></ul>
 </div>
+<div id="modal-history" class="modal" onclick="if(event.target===this) closeModal('modal-history')">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0">Task History</h3>
+      <button class="btn" onclick="closeModal('modal-history')">Close</button>
+    </div>
+    <div id="history-content" style="max-height:55vh;overflow:auto;margin-top:8px"></div>
+  </div>
+</div>
 
+<script src="/static/main.js?v=3" defer></script>
 </body>
 </html>

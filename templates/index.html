@@ -266,8 +266,15 @@
 
       <hr style="margin:12px 0">
 
-      <!-- future: put more page menus here -->
-      <!-- <a class="btn full gray" href="/reports">Reports</a> -->
+      <div class="nav" style="margin-top:6px">
+        <!-- General stations page -->
+        <a href="/stations" class="btn full">Stations</a>
+
+        <!-- Quick link for *today's* plan (uses your today_date; converts 2025/08/20 -> 2025-08-20) -->
+        <a href="/stations?date={{ (today_date or '').replace('/','-') }}" class="btn full gray" style="margin-top:6px">
+          Today’s Plan
+        </a>
+      </div>
     </form>
   </aside>
   <main class="content">

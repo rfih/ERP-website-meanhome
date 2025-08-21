@@ -1,12 +1,16 @@
 from flask import Flask, render_template, request, jsonify, session, send_file
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from db import Base, engine, SessionLocal
 from models import Order, Task, TaskHistory
 from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 import warnings
-from sqlalchemy import and_, text, or_, func
+from sqlalchemy import and_, text, or_, func, desc, asc
+try:
+    from models import Order, SubTask as Task, StationSchedule
+except ImportError:
+    from models import Order, Task as Task, StationSchedule
 import re, unicodedata
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
@@ -723,6 +727,150 @@ def _ymd_digits(s: str) -> str:
     """Keep only digits, e.g. '2025-08-20' or '2025/8/2' -> '20250820' (no zero-pad for month/day if user typed that, but ok)."""
     if not s: return ""
     return re.sub(r"\D", "", s)
+
+def ensure_station_schedule_table():
+    with engine.connect() as c:
+        existing = [r[0] for r in c.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()]
+        if "station_schedule" not in existing:
+            c.execute(text("""
+              CREATE TABLE station_schedule (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                station TEXT,
+                task_id INTEGER,
+                order_id INTEGER,
+                plan_date TEXT,
+                planned_qty INTEGER DEFAULT 0,
+                sequence INTEGER DEFAULT 0,
+                note TEXT DEFAULT '',
+                locked INTEGER DEFAULT 0,
+                created_at TEXT
+              )
+            """))
+ensure_station_schedule_table()
+
+@app.route("/stations")
+def stations():
+    # inputs
+    group = (request.args.get("group") or "").strip()
+    day   = (request.args.get("date")  or date.today().isoformat()).strip()
+
+    with SessionLocal() as s:
+        # list of stations (distinct task.group)
+        station_list = [row[0] for row in s.query(Task.group)
+                                      .filter(Task.group != None)
+                                      .distinct().order_by(Task.group).all()]
+        if not group and station_list:
+            group = station_list[0]
+
+        # if there is a plan for this station+day, show only that (ordered)
+        plan_rows = (s.query(StationSchedule)
+                      .filter(StationSchedule.station==group,
+                              StationSchedule.plan_date==day)
+                      .order_by(asc(StationSchedule.sequence), asc(StationSchedule.id))
+                      .all())
+
+        items = []
+        if plan_rows:
+            # join schedule → (task, order)
+            task_map = {t.id:(t,o) for t,o in s.query(Task, Order)
+                                               .join(Order, Task.order_id==Order.id)
+                                               .filter(Task.id.in_([p.task_id for p in plan_rows]),
+                                                       or_(Order.archived==False, Order.archived.is_(None)))
+                                               .all()}
+            for p in plan_rows:
+                t,o = task_map.get(p.task_id, (None,None))
+                if not t or not o: continue
+                # attach last history quickly if you want (optional)
+                items.append({"task": t, "order": o, "plan": p})
+        else:
+            # no plan yet → show backlog for that station (active orders only)
+            q = (s.query(Task, Order)
+                   .join(Order, Task.order_id==Order.id)
+                   .filter(Task.group==group,
+                           or_(Order.archived==False, Order.archived.is_(None)))
+                   .order_by(desc(Order.id)))
+            items = [{"task":t, "order":o, "plan":None} for t,o in q]
+
+        # today label for header
+        today_str = date.today().isoformat().replace("-","/")
+
+        return render_template("stations.html",
+                               station_list=station_list,
+                               selected_group=group,
+                               tasks=items,
+                               today_date=today_str)
+    
+@app.route("/stations/publish", methods=["POST"])
+def stations_publish():
+    data = request.get_json()
+    day = data.get("date")
+    station = data.get("station")
+    task_ids = data.get("task_ids") or []
+    default_qty = int(data.get("planned_qty") or 0)
+
+    with SessionLocal() as s:
+        # fetch remaining per task to set a sane default if planned_qty not provided
+        rem = {t.id: max(0, (t.quantity or 0) - (t.completed or 0))
+               for t in s.query(Task).filter(Task.id.in_(task_ids)).all()}
+
+        # get current max sequence
+        max_seq = s.query(StationSchedule.sequence)\
+                   .filter(StationSchedule.station==station,
+                           StationSchedule.plan_date==day)\
+                   .order_by(desc(StationSchedule.sequence)).first()
+        seq = (max_seq[0] if max_seq else 0)
+
+        for tid in task_ids:
+            seq += 1
+            s.add(StationSchedule(
+                station=station,
+                task_id=tid,
+                order_id=s.query(Task.order_id).filter(Task.id==tid).scalar(),
+                plan_date=day,
+                planned_qty= default_qty or rem.get(tid, 0),
+                sequence=seq
+            ))
+        s.commit()
+    return jsonify(success=True)
+
+@app.route("/stations/plan/update", methods=["POST"])
+def stations_plan_update():
+    data = request.get_json()
+    updates = data.get("rows") or []  # [{id, planned_qty, sequence}, ...]
+    with SessionLocal() as s:
+        for u in updates:
+            r = s.query(StationSchedule).get(int(u["id"]))
+            if not r: continue
+            if "planned_qty" in u: r.planned_qty = int(u["planned_qty"])
+            if "sequence" in u:    r.sequence    = int(u["sequence"])
+        s.commit()
+    return jsonify(success=True)
+
+@app.route("/stations/plan/remove", methods=["POST"])
+def stations_plan_remove():
+    data = request.get_json()
+    rid = int(data.get("id"))
+    with SessionLocal() as s:
+        s.query(StationSchedule).filter(StationSchedule.id==rid).delete()
+        s.commit()
+    return jsonify(success=True)
+
+@app.route("/finish_task", methods=["POST"])
+def finish_task():
+    data = request.get_json()
+    tid = int(data.get("task_id", 0))
+    if not tid:
+        return jsonify(success=False, message="Missing task_id"), 400
+
+    with SessionLocal() as s:
+        t = s.get(Task, tid)
+        if not t:
+            return jsonify(success=False, message="Task not found"), 404
+        # snap completed to quantity
+        t.completed = t.quantity or 0
+        # optional: stop a running timer here (write a stop row) if you want — can add later
+        s.commit()
+        return jsonify(success=True, completed=t.completed, quantity=t.quantity)
 
 if __name__ == "__main__":
     app.run(debug=True)

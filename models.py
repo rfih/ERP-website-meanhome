@@ -1,7 +1,7 @@
 # models.py
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey, Boolean, DateTime
+    Column, Integer, String, Text, DateTime, ForeignKey, Boolean, DateTime, Boolean, Date,
 )
 from sqlalchemy.orm import relationship
 from db import Base  # Base, engine, SessionLocal live in db.py
@@ -78,3 +78,18 @@ class TaskHistory(Base):
     duration_minutes = Column(Integer)
 
     task = relationship("Task", back_populates="history")
+
+class StationSchedule(Base):
+    __tablename__ = "station_schedule"
+    __table_args__ = {"sqlite_autoincrement": True}   # <- table-level flag
+
+    id          = Column(Integer, primary_key=True)   # no sqlite_autoincrement here
+    station     = Column(String, index=True)
+    task_id     = Column(Integer, index=True)
+    order_id    = Column(Integer, index=True)
+    plan_date   = Column(String, index=True)          # 'YYYY-MM-DD'
+    planned_qty = Column(Integer, default=0)
+    sequence    = Column(Integer, default=0)
+    note        = Column(String, default="")
+    locked      = Column(Boolean, default=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)

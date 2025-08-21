@@ -706,3 +706,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch(e){}
 });
+
+function finishTask(taskId){
+  fetch('/finish_task', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ task_id: taskId })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(!j.success){ alert(j.message||'完成失敗'); return; }
+
+    const row = document.getElementById('task-'+taskId);
+    // Update UI if the row exists (main page), then if on Stations remove it (we filtered finished anyway)
+    if (row){
+      // Update input + remaining cell if they exist (main page structure)
+      const qty = j.quantity || 0;
+      const input = document.getElementById('done-'+taskId);
+      if (input) input.value = qty;
+
+      // progress bar to 100%
+      const fill = row.querySelector('.progress-fill');
+      if (fill) fill.style.width = '100%';
+
+      // remaining cell (main page usually index 5)
+      const cells = row.children;
+      if (cells && cells[5]) cells[5].textContent = '0';
+
+      // stop running UI
+      const startBtn = row.querySelector('button[onclick^="startTask"]');
+      const stopBtn  = row.querySelector('button[onclick^="stopTask"]');
+      if (startBtn) startBtn.disabled = false;
+      if (stopBtn)  stopBtn.disabled  = true;
+
+      const status = row.querySelector('.task-status');
+      if (status){
+        status.classList.remove('running');
+        status.innerHTML = '<span class="dot"></span><span>Idle</span>';
+      }
+
+      // On Stations page, remove the finished row from the list
+      if (window.location.pathname.startsWith('/stations')){
+        row.remove();
+      }
+    }
+
+    toast && toast('已完成');
+  })
+  .catch(()=> alert('完成失敗'));
+}
