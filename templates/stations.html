@@ -11,15 +11,14 @@
     table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 10px;
+        margin-top: 20px;
         background: white;
         border-radius: 5px;
-        overflow: hidden;
+        overflow: auto;
+        overflow-x: auto;
     }
     select { padding: 8px; font-size: 14px; }
-    table { width: 100%; margin-top: 20px; background: white; border-collapse: collapse; }
     th, td {
-        max-width: 120px;
         padding: 10px;
         border: 1px solid #ddd;
         text-align: center;
@@ -145,12 +144,6 @@
         font-size: 12px;
       }
     
-      table {
-        page-break-inside: avoid;
-        width: 100%;
-        border-collapse: collapse;
-      }
-    
       th, td {
         font-size: 12px;
         border: 1px solid #999;
@@ -177,6 +170,119 @@
     .task-status .dot{ width:8px; height:8px; border-radius:50%; background:#adb5bd }
     .task-status.running .dot{ background:#28a745; box-shadow:0 0 0 0 rgba(40,167,69,.4); animation:pulse 1.4s infinite }
     @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(40,167,69,.4)} 70%{box-shadow:0 0 0 8px rgba(40,167,69,0)} 100%{box-shadow:0 0 0 0 rgba(40,167,69,0)} }    
+    
+    .progress{ width:120px; height:10px; background:#edf2f7; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0 }
+    .progress-fill{ height:100%; width:0; background:#0d6efd; transition:width .2s ease }
+    .progress-fill.running{
+      background: repeating-linear-gradient(45deg, #0d6efd, #0d6efd 10px, #5aa2ff 10px, #5aa2ff 20px);
+      animation: move 1s linear infinite;
+    }
+    @keyframes move{ from{background-position:0 0} to{background-position:40px 0} }
+
+    .task-status{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#6c757d }
+    .task-status .dot{ width:8px; height:8px; border-radius:50%; background:#adb5bd }
+    .task-status.running .dot{ background:#28a745; box-shadow:0 0 0 0 rgba(40,167,69,.4); animation:pulse 1.4s infinite }
+    @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(40,167,69,.4)} 70%{box-shadow:0 0 0 8px rgba(40,167,69,0)} 100%{box-shadow:0 0 0 0 rgba(40,167,69,0)} }
+
+    .row-flash{ margin-top:4px; font-size:12px; color:#6c757d }
+    .muted{ color:#6c757d }
+
+    /* Actions column: allow wrapping and avoid clipping */
+    .actions-col{
+      min-width: 240px;           /* tweak: 240–320px depending on your labels */
+      white-space: normal;        /* break 'nowrap' if inherited */
+      overflow: auto;          /* don't clip button edges */
+    }
+    .actions-group{
+      display: flex;
+      flex-wrap: wrap;            /* wrap buttons to next line when tight */
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .actions-group .btn{ flex: 0 0 auto; }
+
+    /* Sidebar transitions */
+    .sidebar{ transition: left .2s ease, width .2s ease, padding .2s ease; }
+
+    /* Desktop: collapse sidebar by toggling a class on <body> */
+    @media (min-width: 901px){
+      body.sb-collapsed .sidebar{
+        /* remove the reserved column (kills the 280px flex-basis) */
+        flex: 0 0 0 !important;
+        flex-basis: 0 !important;
+        width: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        overflow: hidden !important;
+      }
+      body.sb-collapsed .content{ padding-left: 0 !important; }
+    }
+
+    /* Mobile: off-canvas slide */
+    @media (max-width: 900px){
+      .sidebar{
+        position: fixed; left: -300px; top: 0; height: 100vh; z-index: 20;
+      }
+      .sidebar.open{ left: 0; }
+      .overlay{ display: none; }
+      .overlay.show{
+        display: block; position: fixed; inset: 0;
+        background: rgba(0,0,0,.2); z-index: 15;
+      }
+      .hamburger{display:inline-flex; position:sticky; top:10px; margin-bottom:10px}
+    }
+
+    /* Keep the Menu button visible and spaced from the title/toolbar */
+    .hamburger{
+      display: inline-flex; align-items: center; gap: 6px;
+      position: sticky; top: 10px; margin-bottom: 10px; margin-right: 12px;
+    }
+
+    /* 2-column layout */
+    .layout{ display:flex; gap:16px; align-items:flex-start; }
+
+    /* fixed-width sidebar on desktop */
+    .sidebar{
+      flex:0 0 280px;            /* reserve the column */
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:8px;
+      padding:12px;
+    }
+
+    /* main content */
+    .content{ flex:1; padding:0 16px }
+
+    /* Match main page header layout */
+    .page-header{ display:flex; align-items:center; justify-content:space-between; margin:6px 0 12px; }
+    .page-header .left{ display:flex; align-items:center; gap:12px; }
+    .page-header .right{ display:flex; align-items:center; gap:8px; }
+
+    /* main page blue */
+    :root{ --primary:#1677ff; --primary-dark:#0f5ed7; }
+
+    /* header + toolbar layout */
+    .page-header{ display:flex; align-items:center; justify-content:space-between; margin:6px 0 8px; }
+    .page-header .left{ display:flex; align-items:center; gap:12px; }
+    .page-header .right{ color:#6b7280; font-size:12px; white-space:nowrap; }
+    .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin:6px 0 12px; }
+    .toolbar .group{ display:flex; align-items:center; gap:8px; }
+
+    /* table header like main */
+    table thead th{
+      background:var(--primary);
+      color:#fff;
+      border-color:var(--primary-dark);
+      font-weight:600;
+    }
+    table th, table td{ padding:10px 12px; }
+    table tbody tr:nth-child(even) td{ background:#f8fafc; }
+
+    /* actions column — no scrollbars, allow wrapping */
+    .actions-col{ max-width:none !important; min-width:300px; white-space:normal; overflow:visible; }
+    .actions-group{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    .actions-group .btn{ flex:0 0 auto; }
   </style>
   <script>
     function updateTask(taskId, orderId) {
@@ -343,101 +449,165 @@
   </script>
 </head>
 <body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">Search</div>
 
-<nav>
-  <a href="/">🏠 Home</a>
-  <a href="/stations">📊 Station Progress</a>
-</nav>
+      <!-- Search form (GET) -->
+      <form method="get" action="{{ '/archived' if archived_page else '/' }}" class="sbm">
+        <input type="text" name="q" id= "search-q" value="{{ qtext or '' }}"
+              placeholder="搜尋：">
 
-<h2>📊 Station Progress</h2>
-<p>Today: {{ today_date }}</p>
+        <select name="dfield">
+          <option value="any"        {{ 'selected' if (dfield or 'any')=='any' }}>全部日期欄位</option>
+          <option value="demand"     {{ 'selected' if dfield=='demand' }}>客戶交期</option>
+          <option value="delivery"   {{ 'selected' if dfield=='delivery' }}>預計出貨</option>
+          <option value="datecreate" {{ 'selected' if dfield=='datecreate' }}>派單日</option>
+        </select>
 
-<form method="get" style="display:flex; align-items: center; gap: 10px;">
-  <label>選擇組別:</label>
-  <select name="group" onchange="this.form.submit()">
-    {% for name in station_list %}
-      <option value="{{ name }}" {% if name == selected_group %}selected{% endif %}>{{ name }}</option>
-    {% endfor %}
-  </select>
-  <button type="button" onclick="resetStationSort()">Clear Sort</button>
-  <button type="button" onclick="printPage()">🖨️ Print This Station</button>
-</form>
-
-<table>
-  <thead>
-    <tr>
-      <th onclick="sortStationTable(0)">Progress ↑↓</th>
-      <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
-      <th onclick="sortStationTable(2)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
-      <th onclick="sortStationTable(3)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
-      <th onclick="sortStationTable(4)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
-      <th onclick="sortStationTable(5)">製令數量 ↑↓<span class="print-label"><br>Jumlah Pesanan</span></th>
-      <th onclick="sortStationTable(6)">作業內容 ↑↓<span class="print-label"><br>Isi Pekerjaan</span></th>
-      <th>注意事項<br><span class="print-label">Hal yang Perlu Diperhatikan</span></th>
-      <th onclick="sortStationTable(8)">已完成 ↑↓</th>
-      <th onclick="sortStationTable(9)">剩下 ↑↓<span class="print-label"><br>Jumlah Proyek</span></th>
-      <th onclick="sortStationTable(10)">最後更新 ↑↓</th>
-      <th>Actions</th>
-      <th class="print-only">良品數量<span class="print-label"><br>Jumlah Produk Lolos</span></th>
-      <th class="print-only">不良品數量<span class="print-label"><br>Jumlah Produk Tidak Lolos</span></th>
-      <th class="print-only">生產總時間(分)<span class="print-label"><br>Total Waktu Produksi (dalam menit)</span></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for item in tasks %}
-    <tr id="task-{{ item.task.id }}">
-      <td>
-        <div class="progress-bar">
-          <div class="progress-fill" style="width: {{ (item.task.completed / item.task.quantity) * 100 }}%"></div>
+        <div class="row">
+          <input type="date" name="dfrom" value="{{ dfrom or '' }}">
+          <input type="date" name="dto"   value="{{ dto or '' }}">
         </div>
-      </td>
-      <td>{{ item.order.demand_date }}</td>
-      <td>{{ item.order.manufacture_code }}</td>
-      <td>{{ item.order.customer }}</td>
-      <td>{{ item.order.product }}</td>
-      <td>{{ item.task.quantity }}</td>
-      <td>{{ item.task.task }}</td>
-      <td>
-        <textarea id="task-note-{{ item.task.id }}-{{ item.order.id }}" rows="2" style="width: 100%;" class="screen-only">{{ item.task.note or '' }}</textarea>
-        <div class="print-note print-only">{{ item.task.note or '' }}</div>
-      </td>
-      <td>
-        <input type="number" id="task-completed-{{ item.task.id }}-{{ item.order.id }}" value="{{ item.task.completed }}">
-      </td>
-      <td id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">{{ item.task.quantity - item.task.completed }}</td>
-      <td id="last-update-{{ item.task.id }}-{{ item.order.id }}">
-        {% if item.task.history %}
-          {# pick the last history row if it exists #}
-          {% set last = item.task.history|last if item.task.history else None %}
 
-          {% if last and last.timestamp %}
-            {% if last.timestamp is string %}
-              {{ last.timestamp.split(' ')[0] }}
-            {% else %}
-              {{ last.timestamp.strftime('%Y/%m/%d') }}
-            {% endif %}
-            {% if last.delta is not none %} (+{{ last.delta }}){% endif %}
-          {% else %}
-            -
+        <div class="row">
+          <button class="btn" type="submit">Search</button>
+          {% if qtext or dfrom or dto %}
+            <a class="btn gray" href="{{ '/archived' if archived_page else '/' }}">Clear</a>
           {% endif %}
-        {% else %}-{% endif %}
-      </td>
-      <td>
-        <div class="task-status"><span class="dot"></span><span>Idle</span></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-          <button class="btn" onclick="startTask({{ item.task.id }})">Start</button>
-          <button class="btn" onclick="stopTask({{ item.task.id }})">Stop</button>
-          <button class="btn gray" onclick="showHistory({{ item.task.id }})">History</button>
-          <button class="btn red" onclick="finishTask({{ item.task.id }})">Finish</button>
         </div>
-      </td>
-      <td class="print-only"></td>
-      <td class="print-only"></td>
-      <td class="print-only"></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+        <div class="caption">共 {{ orders|length }} 筆{% if qtext or dfrom or dto %}（篩選中）{% endif %}</div>
+
+        <hr style="margin:12px 0">
+
+        <div class="nav" style="margin-top:6px">
+          <!-- General stations page -->
+          <a href="/" class="btn full">Main</a>
+
+          <!-- Quick link for *today's* plan (uses your today_date; converts 2025/08/20 -> 2025-08-20) -->
+
+          </a>
+        </div>
+      </form>
+    </aside>
+    <main class="content">
+      <div class="page-header">
+        <div class="left">
+          <button class="btn hamburger" onclick="toggleSidebar()">☰ Menu</button>
+          <h2>📊 Station Progress</h2>
+        </div>
+        <div class="right">
+          <span class="today">Today: {{ today_date }}</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="group">
+          <form method="get" style="display:flex; align-items: center; gap: 10px;">
+            <label>選擇組別:</label>
+            <select name="group" onchange="this.form.submit()">
+              {% for name in station_list %}
+                <option value="{{ name }}" {% if name == selected_group %}selected{% endif %}>{{ name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+        <div class="group">
+          <button type="button" onclick="resetStationSort()">Clear Sort</button>
+          <button type="button" onclick="printPage()">🖨️ Print This Station</button>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortStationTable(0)">Progress ↑↓</th>
+            <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
+            <th onclick="sortStationTable(2)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
+            <th onclick="sortStationTable(3)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
+            <th onclick="sortStationTable(4)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
+            <th onclick="sortStationTable(5)">製令數量 ↑↓<span class="print-label"><br>Jumlah Pesanan</span></th>
+            <th onclick="sortStationTable(6)">作業內容 ↑↓<span class="print-label"><br>Isi Pekerjaan</span></th>
+            <th>注意事項<br><span class="print-label">Hal yang Perlu Diperhatikan</span></th>
+            <th onclick="sortStationTable(8)">已完成 ↑↓</th>
+            <th onclick="sortStationTable(9)">剩下 ↑↓<span class="print-label"><br>Jumlah Proyek</span></th>
+            <th onclick="sortStationTable(10)">最後更新 ↑↓</th>
+            <th class="actions-col">Actions</th>
+            <th class="print-only">良品數量<span class="print-label"><br>Jumlah Produk Lolos</span></th>
+            <th class="print-only">不良品數量<span class="print-label"><br>Jumlah Produk Tidak Lolos</span></th>
+            <th class="print-only">生產總時間(分)<span class="print-label"><br>Total Waktu Produksi (dalam menit)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in tasks %}
+          {% set running = (item.task.start_time and not item.task.stop_time) %}
+          <tr id="task-{{ item.task.id }}" class="{{ 'is-running' if running else '' }}"
+              data-order-id="{{ item.order.id }}">
+            <td>
+              <div class="progress-bar">
+                <div class="progress-fill {{ 'running' if running else '' }}"
+                    style="width: {{ (item.task.completed / item.task.quantity) * 100 if item.task.quantity else 0 }}%"></div>
+              </div>
+              <div class="row-flash" id="rowflash-{{ item.task.id }}"></div>
+            </td>
+            <td>{{ item.order.demand_date }}</td>
+            <td>{{ item.order.manufacture_code }}</td>
+            <td>{{ item.order.customer }}</td>
+            <td>{{ item.order.product }}</td>
+            <td>{{ item.task.quantity }}</td>
+            <td>{{ item.task.task }}</td>
+            <td>
+              <textarea id="task-note-{{ item.task.id }}-{{ item.order.id }}" rows="2" style="width: 100%;" class="screen-only">{{ item.task.note or '' }}</textarea>
+              <div class="print-note print-only">{{ item.task.note or '' }}</div>
+            </td>
+            <td>
+              <input id="done-{{ item.task.id }}" type="number" min="0" value="{{ item.task.completed or 0 }}" style="width:80px">
+            </td>
+            <td id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">{{ item.task.quantity - item.task.completed }}</td>
+            <td id="last-update-{{ item.task.id }}-{{ item.order.id }}">
+              {% if item.task.history %}
+                {# pick the last history row if it exists #}
+                {% set last = item.task.history|last if item.task.history else None %}
+
+                {% if last and last.timestamp %}
+                  {% if last.timestamp is string %}
+                    {{ last.timestamp.split(' ')[0] }}
+                  {% else %}
+                    {{ last.timestamp.strftime('%Y/%m/%d') }}
+                  {% endif %}
+                  {% if last.delta is not none %} (+{{ last.delta }}){% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              {% else %}-{% endif %}
+            </td>
+            <td class="actions-col">
+              <div class="task-status {{ 'running' if running else '' }}">
+                <span class="dot"></span><span>{{ 'Running' if running else 'Idle' }}</span>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn" onclick="startTask({{ item.task.id }})" {{ 'disabled' if running else '' }}>Start</button>
+                <button class="btn" onclick="updateTask({{ item.task.id }})">Update</button>
+                <button class="btn" onclick="stopTask({{ item.task.id }})"  {{ '' if running else 'disabled' }}>Stop</button>
+                <button class="btn gray" onclick="showHistory({{ item.task.id }})">History</button>
+                <button class="btn red" onclick="finishTask({{ item.task.id }})">Finish</button>
+                <button class="btn red" onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})">Delete</button>
+              </div>
+              {% set rem = (item.task.quantity or 0) - (item.task.completed or 0) %}
+              <div class="muted" data-remaining>
+                剩餘：{{ rem if rem > 0 else 0 }}
+              </div>
+            </td>
+            <td class="print-only"></td>
+            <td class="print-only"></td>
+            <td class="print-only"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </main>
+  </div>
 
 <div id="historyModal" class="modal">
   <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
@@ -453,6 +623,8 @@
     <div id="history-content" style="max-height:55vh;overflow:auto;margin-top:8px"></div>
   </div>
 </div>
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
 
 <script src="/static/main.js?v=3" defer></script>
 </body>

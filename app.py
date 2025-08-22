@@ -866,9 +866,16 @@ def finish_task():
         t = s.get(Task, tid)
         if not t:
             return jsonify(success=False, message="Task not found"), 404
-        # snap completed to quantity
+
+        # snap to 100%
         t.completed = t.quantity or 0
-        # optional: stop a running timer here (write a stop row) if you want — can add later
+
+        # OPTIONAL: unschedule this task from all StationSchedule rows so it never reappears
+        try:
+            s.query(StationSchedule).filter(StationSchedule.task_id == tid).delete()
+        except Exception:
+            pass
+
         s.commit()
         return jsonify(success=True, completed=t.completed, quantity=t.quantity)
 

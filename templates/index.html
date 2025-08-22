@@ -229,6 +229,20 @@
     @media (max-width:900px){
       #search-q{ width:100%; }
     }
+
+    .actions-col{
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: center;
+      overflow: visible;
+      flex-wrap: wrap;   /* defeats any earlier th,td { max-width:… } */
+    }
+    .actions-group{
+      display: flex;                /* <-- make it a flex container */
+      flex-wrap: nowrap;              /* <-- now wrapping works */
+      gap: 6px;
+      justify-content: center;
+    }
   </style>
   <script defer src="/static/main.js"></script>
 </head>
@@ -298,7 +312,7 @@
     </div>
   </div>
   <!-- Content -->
-      <table>
+    <table>
       <tr>
         <th>Progress</th>
         <th>客戶交期</th>
@@ -344,16 +358,18 @@
         <td>{{ o.wallpaper }}</td>
         <td>{{ o.jobdesc }}</td>
         <td id="groups-{{o.id}}">{{ o.active_groups }}</td>
-        <td>
-          {% if archived_page == False %}
-            <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
-            <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
-            <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
-            <button class="btn gray" onclick="archiveOrder({{ o.id }})">Archive</button>
-          {% else %}
-            <button class="btn gray" onclick="restoreOrder({{ o.id }})">Restore</button>
-            <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
-          {% endif %}
+        <td class="actions-col">
+          <div class="actions-group">
+            {% if archived_page == False %}
+              <button class="btn green" onclick="toggleDetails({{o.id}})">Expand</button>
+              <button class="btn gray" onclick="openEditOrder({{ o.id }})">Edit</button>
+              <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+              <button class="btn gray" onclick="archiveOrder({{ o.id }})">Archive</button>
+            {% else %}
+              <button class="btn gray" onclick="restoreOrder({{ o.id }})">Restore</button>
+              <button class="btn red" onclick="deleteOrder({{ o.id }})">Delete</button>
+            {% endif %}
+          </div>
         </td>
       </tr>
 
@@ -394,13 +410,15 @@
                 <td>{{ t.task }}</td>
                 <td><input type="number" id="done-{{ t.id }}" value="{{ t.completed }}" style="width:80px;text-align:center"></td>
                 <td class="remaining">{{ t.remaining }}</td>
-                <td>
-                  <button type="button" class="btn gray" onclick="startTask({{ t.id }})" {{ 'disabled' if t.running else '' }}>Start</button>
-                  <button type="button" class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
-                  <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
-                  <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
-                  <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
-                  <button type="button" class="btn gray" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
+                <td class="actions-col">
+                  <div class="actions-group">
+                    <button type="button" class="btn gray" onclick="startTask({{ t.id }})" {{ 'disabled' if t.running else '' }}>Start</button>
+                    <button type="button" class="btn" onclick="updateTask({{ t.id }}, {{ o.id }})">Update</button>
+                    <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
+                    <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
+                    <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
+                    <button type="button" class="btn gray" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
+                  </div>
                 </td>
               </tr>
               {% endfor %}

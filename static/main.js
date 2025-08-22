@@ -672,27 +672,27 @@ function restoreOrder(orderId){
 function toggleSidebar(){
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('overlay');
+  const btn = document.querySelector('.hamburger');
   const isMobile = window.matchMedia('(max-width: 900px)').matches;
 
   if (isMobile) {
     const open = sb.classList.toggle('open');
     if (ov) ov.classList.toggle('show', open);
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   } else {
-    document.body.classList.toggle('sb-collapsed');
-    // remember state across refresh
-    try {
-      localStorage.setItem('sbCollapsed', document.body.classList.contains('sb-collapsed') ? '1' : '0');
-    } catch(e){}
+    const collapsed = document.body.classList.toggle('sb-collapsed');
+    if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    try { localStorage.setItem('sbCollapsed', collapsed ? '1' : '0'); } catch(e){}
   }
 }
 
-// keep desktop/mobile states tidy when resizing
+// keep states tidy when resizing between mobile/desktop
 window.addEventListener('resize', () => {
   const isMobile = window.matchMedia('(max-width: 900px)').matches;
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('overlay');
 
-  if (!isMobile) { // leaving mobile → desktop
+  if (!isMobile){ // leaving mobile → desktop
     sb.classList.remove('open');
     if (ov) ov.classList.remove('show');
   }
@@ -700,11 +700,16 @@ window.addEventListener('resize', () => {
 
 // restore desktop collapse preference on load
 document.addEventListener('DOMContentLoaded', () => {
-  try {
-    if (localStorage.getItem('sbCollapsed') === '1') {
-      document.body.classList.add('sb-collapsed');
-    }
-  } catch(e){}
+  const isMobile = window.matchMedia('(max-width: 900px)').matches;
+  if (!isMobile){
+    try {
+      if (localStorage.getItem('sbCollapsed') === '1') {
+        document.body.classList.add('sb-collapsed');
+        const btn = document.querySelector('.hamburger');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    } catch(e){}
+  }
 });
 
 function finishTask(taskId){
