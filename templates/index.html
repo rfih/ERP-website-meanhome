@@ -243,6 +243,34 @@
       gap: 6px;
       justify-content: center;
     }
+    /* Overlay should be off by default and not receive clicks */
+    .overlay{ display:none; pointer-events:none; }
+
+    /* Desktop: never show the overlay */
+    @media (min-width:901px){
+      .overlay{ display:none !important; pointer-events:none !important; }
+      .sidebar{ position:static; z-index:auto; }           /* sidebar is inline on desktop */
+    }
+
+    /* Mobile: overlay only when .show is present; sidebar slides in */
+    @media (max-width:900px){
+      .overlay.show{
+        display:block;
+        pointer-events:auto;
+        position:fixed; inset:0;
+        background:rgba(0,0,0,.2);
+        z-index:15;
+      }
+      .sidebar{ position:fixed; left:-300px; top:0; height:100vh; z-index:20; }
+      .sidebar.open{ left:0; }
+    }
+
+    /* When the desktop sidebar is collapsed, make it non-interactive */
+    body.sb-collapsed .sidebar{
+      width:0 !important; flex-basis:0 !important;
+      padding:0 !important; border:0 !important;
+      overflow:hidden !important; pointer-events:none !important;
+    }
   </style>
   <script defer src="/static/main.js"></script>
 </head>

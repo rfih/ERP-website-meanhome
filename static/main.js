@@ -113,41 +113,47 @@ function updateTask(taskId, orderId){
   })
   .then(r => r.json())
   .then(j => {
-    if (!j.success) throw 0;
+    if (!j.success) { alert(j.message || '更新失敗'); return; }
 
     const row = document.getElementById('task-'+taskId);
+    const input = document.getElementById('done-'+taskId);
     if (!row) return;
 
-    // Prefer data-role hooks; fall back to main page indexes
-    let qtyCell = row.querySelector('[data-role="qty"]') || row.children[2];
-    let remCell = row.querySelector('[data-role="remaining"]') || row.children[5];
-
-    // Read qty safely (strip non-digits)
-    const qty = parseInt((qtyCell?.textContent || '0').toString().replace(/[^0-9\-]/g, ''), 10) || 0;
-
-    // Completed can be in j.completed (main) or j.task.completed (stations)
+    // Completed value (works for both pages)
     const completed = Number(j.completed ?? (j.task && j.task.completed) ?? 0);
-    const remaining = Math.max(0, qty - completed);
-
-    // reflect in input
-    const input = document.getElementById('done-'+taskId);
     if (input) input.value = completed;
 
-    // update "剩下"
+    // Quantity: prefer server, then data-role, then Stations fallback (col 5)
+    let qty = Number(j.task && j.task.quantity);
+    if (!qty) {
+      const qtyCell = row.querySelector('[data-role="qty"]');
+      if (qtyCell) {
+        qty = parseInt(String(qtyCell.textContent).replace(/[^0-9\-]/g,''), 10) || 0;
+      } else if (row.children.length > 5) {
+        // stations specific fallback (製令數量 column index)
+        qty = parseInt(String(row.children[5].textContent).replace(/[^0-9\-]/g,''), 10) || 0;
+      } else {
+        qty = 0;
+      }
+    }
+
+    // Remaining cell: prefer data-role, else id fallback
+    const remCell = row.querySelector('[data-role="remaining"]')
+                || document.getElementById(`task-remaining-${taskId}-${orderId}`);
+    const remaining = Math.max(0, qty - completed);
     if (remCell) remCell.textContent = remaining;
 
-    // update progress fill
+    // Progress bar
     const fill = row.querySelector('.progress-fill');
     const pct = qty > 0 ? (completed / qty) * 100 : 0;
     if (fill) fill.style.width = pct + '%';
 
-    // only matters on main page; harmless on stations
-    if (orderId) updateOrderProgress(orderId);
+    // Only meaningful on main page; harmless on stations
+    if (orderId) { try { updateOrderProgress(orderId); } catch(e){} }
 
-    toast && toast('已更新');
+    if (typeof toast === 'function') toast('已更新');
   })
-  .catch(() => alert('更新失敗'));
-}
+
 
 function updateOrderProgress(orderId){
   // find all task rows inside this order’s details block and sum totals
@@ -680,19 +686,25 @@ function restoreOrder(orderId){
 function toggleSidebar(){
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('overlay');
-  const btn = document.querySelector('.hamburger');
   const isMobile = window.matchMedia('(max-width: 900px)').matches;
 
-  if (isMobile) {
+  if (isMobile){
     const open = sb.classList.toggle('open');
-    if (ov) ov.classList.toggle('show', open);
-    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    ov?.classList.toggle('show', open);
   } else {
-    const collapsed = document.body.classList.toggle('sb-collapsed');
-    if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    try { localStorage.setItem('sbCollapsed', collapsed ? '1' : '0'); } catch(e){}
+    document.body.classList.toggle('sb-collapsed');
+    ov?.classList.remove('show');          // <-- important
   }
 }
+
+window.addEventListener('resize', () => {
+  const isMobile = window.matchMedia('(max-width: 900px)').matches;
+  if (!isMobile){
+    document.getElementById('sidebar')?.classList.remove('open');
+    document.getElementById('overlay')?.classList.remove('show');  // <-- ensure gone
+  }
+});
+
 
 // keep states tidy when resizing between mobile/desktop
 window.addEventListener('resize', () => {

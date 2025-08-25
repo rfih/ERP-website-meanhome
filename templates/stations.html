@@ -283,6 +283,34 @@
     .actions-col{ max-width:none !important; min-width:300px; white-space:normal; overflow:visible; }
     .actions-group{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
     .actions-group .btn{ flex:0 0 auto; }
+    /* Overlay should be off by default and not receive clicks */
+    .overlay{ display:none; pointer-events:none; }
+
+    /* Desktop: never show the overlay */
+    @media (min-width:901px){
+      .overlay{ display:none !important; pointer-events:none !important; }
+      .sidebar{ position:static; z-index:auto; }           /* sidebar is inline on desktop */
+    }
+
+    /* Mobile: overlay only when .show is present; sidebar slides in */
+    @media (max-width:900px){
+      .overlay.show{
+        display:block;
+        pointer-events:auto;
+        position:fixed; inset:0;
+        background:rgba(0,0,0,.2);
+        z-index:15;
+      }
+      .sidebar{ position:fixed; left:-300px; top:0; height:100vh; z-index:20; }
+      .sidebar.open{ left:0; }
+    }
+
+    /* When the desktop sidebar is collapsed, make it non-interactive */
+    body.sb-collapsed .sidebar{
+      width:0 !important; flex-basis:0 !important;
+      padding:0 !important; border:0 !important;
+      overflow:hidden !important; pointer-events:none !important;
+    }
   </style>
   <script>
     function updateTask(taskId, orderId) {
@@ -554,7 +582,7 @@
             <td>{{ item.order.manufacture_code }}</td>
             <td>{{ item.order.customer }}</td>
             <td>{{ item.order.product }}</td>
-            <td>{{ item.task.quantity }}</td>
+            <td data-role="qty">{{ item.task.quantity or 0 }}</td>
             <td>{{ item.task.task }}</td>
             <td>
               <textarea id="task-note-{{ item.task.id }}-{{ item.order.id }}" rows="2" style="width: 100%;" class="screen-only">{{ item.task.note or '' }}</textarea>
@@ -563,7 +591,10 @@
             <td>
               <input id="done-{{ item.task.id }}" type="number" min="0" value="{{ item.task.completed or 0 }}" style="width:80px">
             </td>
-            <td id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">{{ item.task.quantity - item.task.completed }}</td>
+            <td data-role="remaining" id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">
+              {% set rem = (item.task.quantity or 0) - (item.task.completed or 0) %}
+              {{ rem if rem > 0 else 0 }}
+            </td>
             <td id="last-update-{{ item.task.id }}-{{ item.order.id }}">
               {% if item.task.history %}
                 {# pick the last history row if it exists #}
