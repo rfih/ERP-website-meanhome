@@ -585,10 +585,9 @@
               <div class="task-status {{ 'running' if running else '' }}">
                 <span class="dot"></span><span>{{ 'Running' if running else 'Idle' }}</span>
               </div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-              <div style="display:flex; gap:6px; align-items:center;">
+              <div class="actions-group">
                 <button class="btn" onclick="startTask({{ item.task.id }})" {{ 'disabled' if running else '' }}>Start</button>
-                <button class="btn" onclick="updateTask({{ item.task.id }})">Update</button>
+                <button class="btn" onclick="updateTask({{ item.task.id }}, {{ item.order.id }})">Update</button>
                 <button class="btn" onclick="stopTask({{ item.task.id }})"  {{ '' if running else 'disabled' }}>Stop</button>
                 <button class="btn gray" onclick="showHistory({{ item.task.id }})">History</button>
                 <button class="btn red" onclick="finishTask({{ item.task.id }})">Finish</button>
@@ -620,7 +619,7 @@
       <h3 style="margin:0">Task History</h3>
       <button class="btn" onclick="closeModal('modal-history')">Close</button>
     </div>
-    <div id="history-content" style="max-height:55vh;overflow:auto;margin-top:8px"></div>
+    <div id="history-content" style="max-height:100vh;overflow:auto;margin-top:8px"></div>
   </div>
 </div>
 <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>

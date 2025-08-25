@@ -314,27 +314,52 @@ def get_task(task_id):
 
 @app.route("/update_task", methods=["POST"])
 def update_task():
-    data = request.get_json()
-    order_id = int(data["order_id"])
-    task_id = int(data["task_id"])
+    data = request.get_json() or {}
+    task_id = int(data.get("task_id", 0))
+    if not task_id:
+        return jsonify(success=False, message="task_id required"), 400
+
+    # order_id is optional; we’ll infer from the task if not provided
+    order_id = data.get("order_id")
+
     new_completed = int(data.get("completed", 0))
     note = data.get("note", "")
+
+    now = datetime.now(timezone.utc)
+
     with SessionLocal() as session:
-        t = session.query(Task).filter_by(id=task_id, order_id=order_id).first()
+        # fetch by id; optionally verify order_id if provided
+        t = session.get(Task, task_id)
         if not t:
             return jsonify(success=False, message="Task not found"), 404
+        if order_id and int(order_id) != (t.order_id or 0):
+            # optional: reject mismatched order_id; or just ignore
+            pass
+
         prev = t.completed or 0
-        t.completed = max(0, min(new_completed, t.quantity or 0))  # clamp
+        qty = t.quantity or 0
+        t.completed = max(0, min(new_completed, qty))  # clamp
+
         label = note or ("update" if t.completed != prev else "noop")
         session.add(TaskHistory(
             task_id=t.id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=now,
             delta=(t.completed - prev),
             note=label,
             completed=t.completed
         ))
         session.commit()
-        return jsonify(success=True, completed=t.completed)
+
+        return jsonify(
+            success=True,
+            completed=t.completed,             # keeps main.js working
+            task={                              # lets stations.html update cleanly
+                "completed": t.completed,
+                "quantity": qty,
+                "delta": t.completed - prev,
+                "timestamp": now.isoformat().replace("+00:00", "Z")
+            }
+        )
     
 def iso(dt):
     if not dt:

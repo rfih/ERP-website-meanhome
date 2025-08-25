@@ -118,25 +118,33 @@ function updateTask(taskId, orderId){
     const row = document.getElementById('task-'+taskId);
     if (!row) return;
 
-    // task cells: [0]=progress, [1]=組別, [2]=數量, [3]=工作內容, [4]=已完成(input), [5]=剩下
-    const qty = parseInt(row.children[2].textContent || '0', 10);
-    const completed = j.completed || 0;
+    // Prefer data-role hooks; fall back to main page indexes
+    let qtyCell = row.querySelector('[data-role="qty"]') || row.children[2];
+    let remCell = row.querySelector('[data-role="remaining"]') || row.children[5];
+
+    // Read qty safely (strip non-digits)
+    const qty = parseInt((qtyCell?.textContent || '0').toString().replace(/[^0-9\-]/g, ''), 10) || 0;
+
+    // Completed can be in j.completed (main) or j.task.completed (stations)
+    const completed = Number(j.completed ?? (j.task && j.task.completed) ?? 0);
     const remaining = Math.max(0, qty - completed);
 
-    // update input + remaining cell
+    // reflect in input
     const input = document.getElementById('done-'+taskId);
     if (input) input.value = completed;
-    row.children[5].textContent = remaining;
 
-    // update task progress bar width
+    // update "剩下"
+    if (remCell) remCell.textContent = remaining;
+
+    // update progress fill
     const fill = row.querySelector('.progress-fill');
-    const pct = (qty ? (completed / qty) * 100 : 0);
+    const pct = qty > 0 ? (completed / qty) * 100 : 0;
     if (fill) fill.style.width = pct + '%';
 
-    // update the order-level bar
-    updateOrderProgress(orderId);
+    // only matters on main page; harmless on stations
+    if (orderId) updateOrderProgress(orderId);
 
-    toast('已更新');
+    toast && toast('已更新');
   })
   .catch(() => alert('更新失敗'));
 }
