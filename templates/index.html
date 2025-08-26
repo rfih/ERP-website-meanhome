@@ -123,7 +123,7 @@
         transition:left .2s ease-in-out;
       }
       .sidebar.open{left:0}
-      .overlay{display:none}
+      .overlay{display:none; pointer-events:none;}
       .overlay.show{display:block; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:15}
       .hamburger{display:inline-flex; position:sticky; top:10px; margin-bottom:10px}
     }
@@ -146,7 +146,7 @@
     @media (max-width:900px){
       .sidebar{ position:fixed; left:-300px; top:0; height:100vh; z-index:20; transition:left .2s; }
       .sidebar.open{ left:0; }
-      .overlay{ display:none; }
+      .overlay{ display:none; pointer-events:none; }
       .overlay.show{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:15; }
     }
     /* Collapsible sidebar (desktop + mobile) */
@@ -167,7 +167,7 @@
         transition:left .2s ease-in-out;
       }
       .sidebar.open{ left:0; }
-      .overlay{ display:none; }
+      .overlay{ display:none; pointer-events: none;}
       .overlay.show{ display:block; position:fixed; inset:0; background:rgba(0,0,0,.2); z-index:15; }
     }
 
@@ -256,7 +256,7 @@
     @media (max-width:900px){
       .overlay.show{
         display:block;
-        pointer-events:auto;
+        pointer-events:none;
         position:fixed; inset:0;
         background:rgba(0,0,0,.2);
         z-index:15;
@@ -310,11 +310,12 @@
 
       <div class="nav" style="margin-top:6px">
         <!-- General stations page -->
-        <a href="/stations" class="btn full">Stations</a>
+        <a href="/stations/today" class="btn full">Stations — Today</a>
+        <hr style="margin:12px 0">
+        <a href="/stations/backlog" class="btn full gray" style="margin-top:6px">Stations — Backlog</a>
+
 
         <!-- Quick link for *today's* plan (uses your today_date; converts 2025/08/20 -> 2025-08-20) -->
-        <a href="/stations?date={{ (today_date or '').replace('/','-') }}" class="btn full gray" style="margin-top:6px">
-          Today’s Plan
         </a>
       </div>
     </form>
@@ -466,7 +467,7 @@
   </div>
 
   <!-- Mobile overlay -->
-  <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+  <div class="overlay" id="overlay"></div>
       <!-- Import Modal -->
   <div id="modal-import" class="modal" onclick="if(event.target===this) closeModal('modal-import')">
     <div class="panel">

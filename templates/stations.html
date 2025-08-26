@@ -24,6 +24,7 @@
         text-align: center;
     }
     th { background-color: #333; color: white; }
+      .btn{padding:10px 12px;border:0;border-radius:4px;color:#fff;background:#007bff;cursor:pointer}
     tr:nth-child(even) { background-color: #f9f9f9; }
     tr:hover { background-color: #ddd; }
     
@@ -228,7 +229,7 @@
       .overlay{ display: none; }
       .overlay.show{
         display: block; position: fixed; inset: 0;
-        background: rgba(0,0,0,.2); z-index: 15;
+        background: rgba(0,0,0,.2); z-index: 15; pointer-events:auto;
       }
       .hamburger{display:inline-flex; position:sticky; top:10px; margin-bottom:10px}
     }
@@ -512,6 +513,11 @@
         <div class="nav" style="margin-top:6px">
           <!-- General stations page -->
           <a href="/" class="btn full">Main</a>
+          <hr style="margin:12px 0">
+          <a href="/stations/today" class="btn full">Stations — Today</a>
+          <hr style="margin:12px 0">
+          <a href="/stations/backlog" class="btn full gray" style="margin-top:6px">Stations — Backlog
+
 
           <!-- Quick link for *today's* plan (uses your today_date; converts 2025/08/20 -> 2025-08-20) -->
 
@@ -523,7 +529,12 @@
       <div class="page-header">
         <div class="left">
           <button class="btn hamburger" onclick="toggleSidebar()">☰ Menu</button>
-          <h2>📊 Station Progress</h2>
+          <h2 style="margin:0">
+            Station Progress — {{ 'Today' if page_mode == 'today' else 'Backlog' }}
+          </h2>
+          <p class="muted" style="margin:4px 0 0">
+            {% if page_mode == 'today' %}Date: {{ day }}{% else %}All open tasks{% endif %}
+          </p>
         </div>
         <div class="right">
           <span class="today">Today: {{ today_date }}</span>
@@ -531,14 +542,24 @@
       </div>
       <div class="toolbar">
         <div class="group">
-          <form method="get" style="display:flex; align-items: center; gap: 10px;">
+          {% set form_action = '/stations/today' if page_mode == 'today' else '/stations/backlog' %}
+          <form method="get" action="{{ form_action }}" style="display:flex; align-items:center; gap:8px; margin:0">
             <label>選擇組別:</label>
+            {% set form_action = '/stations/today' if page_mode == 'today' else '/stations/backlog' %}
             <select name="group" onchange="this.form.submit()">
               {% for name in station_list %}
                 <option value="{{ name }}" {% if name == selected_group %}selected{% endif %}>{{ name }}</option>
               {% endfor %}
             </select>
+            {% if page_mode == 'today' %}
+              <input type="date" name="date" value="{{ day }}" onchange="this.form.submit()">
+            {% endif %}
           </form>
+          {% if page_mode == 'backlog' %}
+            <div class="group">
+              <button type="button" class="btn" onclick="planSelected()">加入今日計畫</button>
+            </div>
+          {% endif %}
         </div>
         <div class="group">
           <button type="button" onclick="resetStationSort()">Clear Sort</button>
@@ -561,6 +582,11 @@
             <th onclick="sortStationTable(9)">剩下 ↑↓<span class="print-label"><br>Jumlah Proyek</span></th>
             <th onclick="sortStationTable(10)">最後更新 ↑↓</th>
             <th class="actions-col">Actions</th>
+            {% if page_mode == 'backlog' %}
+              <th style="width:28px; text-align:center">
+                <input type="checkbox" id="chk-all" onclick="toggleAll(this)">
+              </th>
+            {% endif %}
             <th class="print-only">良品數量<span class="print-label"><br>Jumlah Produk Lolos</span></th>
             <th class="print-only">不良品數量<span class="print-label"><br>Jumlah Produk Tidak Lolos</span></th>
             <th class="print-only">生產總時間(分)<span class="print-label"><br>Total Waktu Produksi (dalam menit)</span></th>
@@ -570,7 +596,7 @@
           {% for item in tasks %}
           {% set running = (item.task.start_time and not item.task.stop_time) %}
           <tr id="task-{{ item.task.id }}" class="{{ 'is-running' if running else '' }}"
-              data-order-id="{{ item.order.id }}">
+              data-order-id="{{ item.order.id }}" data-qty="{{ item.task.quantity or 0 }}">
             <td>
               <div class="progress-bar">
                 <div class="progress-fill {{ 'running' if running else '' }}"
@@ -591,7 +617,7 @@
             <td>
               <input id="done-{{ item.task.id }}" type="number" min="0" value="{{ item.task.completed or 0 }}" style="width:80px">
             </td>
-            <td data-role="remaining" id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">
+            <td class="remaining" id="task-remaining-{{ item.task.id }}-{{ item.order.id }}">
               {% set rem = (item.task.quantity or 0) - (item.task.completed or 0) %}
               {{ rem if rem > 0 else 0 }}
             </td>
@@ -623,12 +649,24 @@
                 <button class="btn gray" onclick="showHistory({{ item.task.id }})">History</button>
                 <button class="btn red" onclick="finishTask({{ item.task.id }})">Finish</button>
                 <button class="btn red" onclick="deleteTask({{ item.task.id }}, {{ item.order.id }})">Delete</button>
+                {% if page_mode == 'today' %}
+                  <button class="btn gray" onclick="unplanOne({{ item.task.id }})">Remove</button>
+                {% endif %}
+                {% if page_mode == 'backlog' %}
+                  <button class="btn outline" onclick="planOne({{ item.task.id }})">➕ Plan</button>
+                  <button class="btn gray" onclick="setPlanDate(1)">明天</button>
+                {% endif %}
               </div>
               {% set rem = (item.task.quantity or 0) - (item.task.completed or 0) %}
               <div class="muted" data-remaining>
                 剩餘：{{ rem if rem > 0 else 0 }}
               </div>
             </td>
+            {% if page_mode == 'backlog' %}
+              <td style="text-align:center">
+                <input type="checkbox" class="chk-task" value="{{ item.task.id }}">
+              </td>
+            {% endif %}
             <td class="print-only"></td>
             <td class="print-only"></td>
             <td class="print-only"></td>
@@ -653,7 +691,7 @@
     <div id="history-content" style="max-height:100vh;overflow:auto;margin-top:8px"></div>
   </div>
 </div>
-<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="overlay" id="overlay"></div>
 
 
 <script src="/static/main.js?v=3" defer></script>

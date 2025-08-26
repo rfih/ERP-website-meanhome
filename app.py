@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session, send_file
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from db import Base, engine, SessionLocal
 from models import Order, Task, TaskHistory
 from io import BytesIO
@@ -903,6 +903,190 @@ def finish_task():
 
         s.commit()
         return jsonify(success=True, completed=t.completed, quantity=t.quantity)
+    
+TZ = timezone(timedelta(hours=8))
+
+def today_yyyy_mm_dd():
+    return datetime.now(TZ).strftime("%Y-%m-%d")
+
+def station_names(session):
+    # distinct station list from tasks."group"
+    rows = session.query(Task.group).filter(Task.group.isnot(None)).distinct().all()
+    return [r[0] for r in rows]
+
+def make_item(session, t):
+    o = session.get(Order, t.order_id)
+    if not o:
+        return None
+    # skip finished
+    qty = t.quantity or 0
+    comp = t.completed or 0
+    if qty - comp <= 0:
+        return None
+    return {"order": o, "task": t}
+
+@app.route("/stations/today")
+def stations_today():
+    group = (request.args.get("group") or "").strip()
+    day = (request.args.get("date") or today_yyyy_mm_dd()).strip()
+
+    with SessionLocal() as s:
+        stations = station_names(s)
+        if not group and stations:
+            group = stations[0]
+
+        tasks = []
+        if group:
+            plan = (s.query(StationSchedule)
+                      .filter(StationSchedule.station == group,
+                              StationSchedule.plan_date == day)
+                      .order_by(StationSchedule.sequence.asc(),
+                                StationSchedule.id.asc())
+                      .all())
+            for p in plan:
+                t = s.get(Task, p.task_id)
+                it = make_item(s, t) if t else None
+                if it:
+                    tasks.append(it)
+
+        return render_template(
+            "stations.html",
+            page_mode="today",
+            day=day,
+            tasks=tasks,
+            station_list=stations,
+            selected_group=group,
+            today_date=day,  # for header display
+        )
+
+@app.route("/stations/backlog")
+def stations_backlog():
+    group = (request.args.get("group") or "").strip()
+
+    with SessionLocal() as s:
+        stations = station_names(s)
+        if not group and stations:
+            group = stations[0]
+
+        tasks = []
+        if group:
+            # all open tasks for this station (exclude finished & archived orders)
+            q_open = (
+                s.query(Task)
+                 .join(Order, Order.id == Task.order_id)
+                 .filter(Task.group == group)
+                 .filter(func.coalesce(Task.quantity, 0) - func.coalesce(Task.completed, 0) > 0)
+            )
+            # if your Order has is_archived flag, keep this filter:
+            if hasattr(Order, "is_archived"):
+                q_open = q_open.filter(func.coalesce(Order.is_archived, 0) == 0)
+
+            # simple ordering: by order id then task id
+            for t in q_open.order_by(Order.id.asc(), Task.id.asc()).all():
+                it = make_item(s, t)
+                if it:
+                    tasks.append(it)
+
+        return render_template(
+            "stations.html",
+            page_mode="backlog",
+            day=today_yyyy_mm_dd(),
+            tasks=tasks,
+            station_list=stations,
+            selected_group=group,
+            today_date=today_yyyy_mm_dd(),
+        )
+
+@app.route("/stations/plan", methods=["POST"])
+def stations_plan():
+    data = request.get_json() or {}
+    station = (data.get("station") or "").strip()
+    day = (data.get("date") or today_yyyy_mm_dd()).strip()
+    ids = data.get("task_ids") or []
+
+    if not station or not ids:
+        return jsonify(success=False, message="Missing station or task_ids"), 400
+
+    added, skipped = [], []
+    with SessionLocal() as s:
+        max_seq = s.query(func.max(StationSchedule.sequence))\
+                   .filter(StationSchedule.station==station,
+                           StationSchedule.plan_date==day)\
+                   .scalar() or 0
+
+        for tid in ids:
+            try:
+                tid = int(tid)
+            except Exception:
+                skipped.append({"id": tid, "reason": "bad_id"})
+                continue
+
+            t = s.get(Task, tid)
+            if not t:
+                skipped.append({"id": tid, "reason": "not_found"})
+                continue
+
+            # skip finished
+            qty = t.quantity or 0
+            comp = t.completed or 0
+            if qty - comp <= 0:
+                skipped.append({"id": tid, "reason": "finished"})
+                continue
+
+            # skip if already planned for that date+station
+            exists = s.query(StationSchedule).filter(
+                StationSchedule.station==station,
+                StationSchedule.plan_date==day,
+                StationSchedule.task_id==tid
+            ).first()
+            if exists:
+                skipped.append({"id": tid, "reason": "exists"})
+                continue
+
+            max_seq += 10
+            s.add(StationSchedule(
+                station=station,
+                task_id=tid,
+                order_id=t.order_id,
+                plan_date=day,
+                planned_qty=qty - comp,
+                sequence=max_seq,
+                note=""
+            ))
+            added.append(tid)
+
+        s.commit()
+
+    return jsonify(success=True, station=station, date=day, added=added, skipped=skipped)
+
+@app.route("/stations/unplan", methods=["POST"])
+def stations_unplan():
+    data = request.get_json() or {}
+    station = (data.get("station") or "").strip()
+    day = (data.get("date") or "").strip()
+    ids = data.get("task_ids") or []
+    if not station or not day or not ids:
+        return jsonify(success=False, message="Missing station/date/task_ids"), 400
+
+    removed, missing = [], []
+    with SessionLocal() as s:
+        for tid in ids:
+            try:
+                tid = int(tid)
+            except Exception:
+                missing.append(tid); continue
+            q = (s.query(StationSchedule)
+                   .filter(StationSchedule.station == station,
+                           StationSchedule.plan_date == day,
+                           StationSchedule.task_id == tid))
+            if q.first():
+                q.delete(synchronize_session=False)
+                removed.append(tid)
+            else:
+                missing.append(tid)
+        s.commit()
+    return jsonify(success=True, station=station, date=day,
+                   removed=removed, missing=missing)
 
 if __name__ == "__main__":
     app.run(debug=True)

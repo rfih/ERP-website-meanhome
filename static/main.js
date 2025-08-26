@@ -104,7 +104,8 @@ function submitTask(){
 } 
 
 function updateTask(taskId, orderId){
-  const val = parseInt(document.getElementById('done-'+taskId).value || '0', 10);
+  const input = document.getElementById('done-'+taskId);
+  const val = parseInt((input && input.value) || '0', 10);
 
   fetch('/update_task', {
     method: 'POST',
@@ -113,47 +114,34 @@ function updateTask(taskId, orderId){
   })
   .then(r => r.json())
   .then(j => {
-    if (!j.success) { alert(j.message || '更新失敗'); return; }
+    if (!j.success) throw 0;
 
     const row = document.getElementById('task-'+taskId);
-    const input = document.getElementById('done-'+taskId);
     if (!row) return;
 
-    // Completed value (works for both pages)
-    const completed = Number(j.completed ?? (j.task && j.task.completed) ?? 0);
+    // read the quantity from a data- attribute, not from a column index
+    const qty = parseInt(row.dataset.qty || '0', 10);
+    const completed = j.completed || 0;
+    const rem = Math.max(0, qty - completed);
+
+    // update input
     if (input) input.value = completed;
 
-    // Quantity: prefer server, then data-role, then Stations fallback (col 5)
-    let qty = Number(j.task && j.task.quantity);
-    if (!qty) {
-      const qtyCell = row.querySelector('[data-role="qty"]');
-      if (qtyCell) {
-        qty = parseInt(String(qtyCell.textContent).replace(/[^0-9\-]/g,''), 10) || 0;
-      } else if (row.children.length > 5) {
-        // stations specific fallback (製令數量 column index)
-        qty = parseInt(String(row.children[5].textContent).replace(/[^0-9\-]/g,''), 10) || 0;
-      } else {
-        qty = 0;
-      }
-    }
+    // update "remaining" cell (works in both pages)
+    const remEl = row.querySelector('.remaining');
+    if (remEl) remEl.textContent = rem;
 
-    // Remaining cell: prefer data-role, else id fallback
-    const remCell = row.querySelector('[data-role="remaining"]')
-                || document.getElementById(`task-remaining-${taskId}-${orderId}`);
-    const remaining = Math.max(0, qty - completed);
-    if (remCell) remCell.textContent = remaining;
-
-    // Progress bar
+    // update the per-task progress bar
     const fill = row.querySelector('.progress-fill');
-    const pct = qty > 0 ? (completed / qty) * 100 : 0;
-    if (fill) fill.style.width = pct + '%';
+    if (fill) fill.style.width = (qty ? (completed/qty)*100 : 0) + '%';
 
-    // Only meaningful on main page; harmless on stations
-    if (orderId) { try { updateOrderProgress(orderId); } catch(e){} }
+    // update the order bar on the main page (no-op on /stations)
+    if (orderId) updateOrderProgress(orderId);
 
-    if (typeof toast === 'function') toast('已更新');
+    toast('已更新');
   })
-
+  .catch(() => alert('更新失敗'));
+}
 
 function updateOrderProgress(orderId){
   // find all task rows inside this order’s details block and sum totals
@@ -693,42 +681,28 @@ function toggleSidebar(){
     ov?.classList.toggle('show', open);
   } else {
     document.body.classList.toggle('sb-collapsed');
-    ov?.classList.remove('show');          // <-- important
+    ov?.classList.remove('show');    // <- critical: no overlay on desktop
   }
 }
 
+// tap overlay to close on mobile
+document.getElementById('overlay')?.addEventListener('click', () => {
+  document.getElementById('sidebar')?.classList.remove('open');
+  document.getElementById('overlay')?.classList.remove('show');
+});
+
+// moving to desktop? kill mobile state
 window.addEventListener('resize', () => {
-  const isMobile = window.matchMedia('(max-width: 900px)').matches;
-  if (!isMobile){
+  if (!window.matchMedia('(max-width: 900px)').matches){
     document.getElementById('sidebar')?.classList.remove('open');
-    document.getElementById('overlay')?.classList.remove('show');  // <-- ensure gone
+    document.getElementById('overlay')?.classList.remove('show');
   }
 });
 
-
-// keep states tidy when resizing between mobile/desktop
-window.addEventListener('resize', () => {
-  const isMobile = window.matchMedia('(max-width: 900px)').matches;
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('overlay');
-
-  if (!isMobile){ // leaving mobile → desktop
-    sb.classList.remove('open');
-    if (ov) ov.classList.remove('show');
-  }
-});
-
-// restore desktop collapse preference on load
+// belt-and-suspenders on load
 document.addEventListener('DOMContentLoaded', () => {
-  const isMobile = window.matchMedia('(max-width: 900px)').matches;
-  if (!isMobile){
-    try {
-      if (localStorage.getItem('sbCollapsed') === '1') {
-        document.body.classList.add('sb-collapsed');
-        const btn = document.querySelector('.hamburger');
-        if (btn) btn.setAttribute('aria-expanded', 'false');
-      }
-    } catch(e){}
+  if (!window.matchMedia('(max-width: 900px)').matches){
+    document.getElementById('overlay')?.classList.remove('show');
   }
 });
 
@@ -779,4 +753,154 @@ function finishTask(taskId){
     toast && toast('已完成');
   })
   .catch(()=> alert('完成失敗'));
+}
+
+// chooses the station from the dropdown
+function currentStationName(){
+  return (document.querySelector('select[name="group"]')?.value || '').trim();
+}
+
+// read / remember the plan date
+function getPlanDate(){
+  return (document.getElementById('plan-date')?.value || '').trim();
+}
+
+function setPlanDate(days){
+  const inp = document.getElementById('plan-date');
+  const base = inp?.value ? new Date(inp.value) : new Date();
+  base.setDate(base.getDate() + (days|0));
+  inp.value = base.toISOString().slice(0,10);
+}
+
+// bulk plan selected rows (Backlog)
+function planSelected(){
+  const all = Array.from(document.querySelectorAll('.chk-task:checked'))
+                    .map(el => parseInt(el.value, 10))
+                    .filter(Boolean);
+  if (!all.length){ alert('請先選擇工作'); return; }
+
+  // split finished vs valid
+  const finished = all.filter(isFinished);
+  const ids = all.filter(id => !isFinished(id));
+
+  if (finished.length){
+    alert(`有 ${finished.length} 筆工作已經 100% 完成，已略過。`);
+  }
+  if (!ids.length) return;
+
+  const station = currentStationName();
+  const date = getPlanDate();
+
+  fetch('/stations/plan', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ station, date, task_ids: ids })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(!j.success){ alert(j.message||'規劃失敗'); return; }
+    // remove added rows from backlog
+    (j.added||[]).forEach(tid=> document.getElementById('task-'+tid)?.remove());
+
+    // surface server-side skips (e.g., finished detected on server)
+    const skippedFinished = (j.skipped||[]).filter(x => x.reason==='finished').length;
+    const skippedExists   = (j.skipped||[]).filter(x => x.reason==='exists').length;
+    const msg = [
+      `加入 ${ (j.added||[]).length } 筆`,
+      skippedFinished ? `略過 ${skippedFinished}（已完成）` : '',
+      skippedExists   ? `略過 ${skippedExists}（已在今日）` : ''
+    ].filter(Boolean).join('，');
+    if (typeof toast==='function') toast(msg);
+  })
+  .catch(()=> alert('規劃失敗'));
+}
+
+
+// per-row quick plan (Backlog)
+function planOne(taskId){
+  if (isFinished(taskId)){
+    alert('此工作已經 100% 完成，無需加入計畫。');
+    return;
+  }
+  const station = currentStationName();
+  const date = getPlanDate();
+
+  fetch('/stations/plan', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ station, date, task_ids: [taskId] })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(!j.success){ alert(j.message||'加入失敗'); return; }
+    if ((j.added||[]).includes(taskId)){
+      document.getElementById('task-'+taskId)?.remove();
+      if (typeof toast==='function') toast('已加入計畫');
+    } else {
+      // handle server skip reasons
+      const k = (j.skipped||[]).find(x=>x.id===taskId);
+      if (k?.reason === 'finished') alert('此工作已完成，未加入計畫。');
+      else if (k?.reason === 'exists') alert('此工作已在該日計畫中。');
+      else alert('未加入計畫。');
+    }
+  })
+  .catch(()=> alert('加入失敗'));
+}
+
+
+// select-all in Backlog
+function toggleAll(cb){
+  document.querySelectorAll('.chk-task').forEach(x => x.checked = cb.checked);
+}
+
+function currentStationName(){
+  return (document.querySelector('select[name="group"]')?.value || '').trim();
+}
+function isoToday(){
+  // local “today” in YYYY-MM-DD
+  const now = new Date();
+  const tz = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return tz.toISOString().slice(0, 10);
+}
+
+function getPlanDate(){
+  // If a date input exists (e.g. on Stations Today), use it; otherwise default to today
+  const el = document.getElementById('plan-date');
+  const v = (el && el.value || '').trim();
+  return v || isoToday();
+}
+
+
+function unplanOne(taskId){
+  const station = currentStationName();
+  const date = getPlanDate();
+  if (!station || !date){ alert('缺少站別或日期'); return; }
+
+  fetch('/stations/unplan', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ station, date, task_ids: [taskId] })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if (!j.success){ alert(j.message || '移除失敗'); return; }
+    if ((j.removed||[]).includes(taskId)){
+      document.getElementById('task-'+taskId)?.remove();
+      if (typeof toast === 'function') toast('已自今日計畫移除');
+    } else {
+      if (typeof toast === 'function') toast('不在今日計畫');
+    }
+  })
+  .catch(()=> alert('移除失敗'));
+}
+
+function taskRemaining(taskId){
+  const row = document.getElementById('task-'+taskId);
+  const remEl = row?.querySelector('.remaining');
+  const raw = (remEl?.textContent || '').toString();
+  const n = parseInt(raw.replace(/[^0-9\-]/g, ''), 10);
+  return isNaN(n) ? 0 : n;
+}
+function isFinished(taskId){
+  return taskRemaining(taskId) <= 0; // 0 or negative treated as finished
 }
