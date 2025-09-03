@@ -6,7 +6,7 @@ from io import BytesIO
 import openpyxl
 from openpyxl import Workbook
 import warnings
-from sqlalchemy import and_, text, or_, func, desc, asc
+from sqlalchemy import and_, text, or_, func, desc, asc, case
 try:
     from models import Order, SubTask as Task, StationSchedule
 except ImportError:
@@ -927,8 +927,10 @@ def make_item(session, t):
 
 @app.route("/stations/today")
 def stations_today():
-    group = (request.args.get("group") or "").strip()
-    day = (request.args.get("date") or today_yyyy_mm_dd()).strip()
+    group   = (request.args.get("group") or "").strip()
+    day     = (request.args.get("date") or today_yyyy_mm_dd()).strip()
+    rolling = (request.args.get("rolling") or "1") != "0"  # default rolling
+    sort    = (request.args.get("sort") or "seq").strip()  # "seq" | "due"
 
     with SessionLocal() as s:
         stations = station_names(s)
@@ -937,17 +939,53 @@ def stations_today():
 
         tasks = []
         if group:
-            plan = (s.query(StationSchedule)
-                      .filter(StationSchedule.station == group,
-                              StationSchedule.plan_date == day)
-                      .order_by(StationSchedule.sequence.asc(),
-                                StationSchedule.id.asc())
-                      .all())
-            for p in plan:
-                t = s.get(Task, p.task_id)
-                it = make_item(s, t) if t else None
-                if it:
-                    tasks.append(it)
+            base = (
+                s.query(Task, StationSchedule.plan_date, StationSchedule.sequence)
+                 .join(Order, Order.id == Task.order_id)
+                 .join(StationSchedule, StationSchedule.task_id == Task.id)
+                 .filter(StationSchedule.station == group)
+                 .filter((Task.quantity.isnot(None)) & (Task.quantity > (Task.completed or 0)))
+                 .filter(or_(Order.archived == None, Order.archived == 0))
+            )
+            if not rolling:
+                base = base.filter(StationSchedule.plan_date == day)
+
+            if sort == "due":
+                base = base.order_by(*effective_due_orderby_asc(),
+                                    asc(StationSchedule.plan_date),
+                                    asc(StationSchedule.sequence),
+                                    asc(Task.id))
+            else:
+                base = base.order_by(asc(StationSchedule.plan_date),
+                                    asc(StationSchedule.sequence),
+                                    asc(Task.id))
+
+            rows = base.all()
+            for t, plan_date, seq in rows:
+                if remaining_of(t) <= 0:
+                    continue
+                o = s.get(Order, t.order_id)
+                # effective due + source label
+                eff_date, eff_src = None, None
+                if o.delivery and o.demand_date:
+                    eff_date = min(o.delivery, o.demand_date)
+                    eff_src = "預計出貨" if o.delivery <= o.demand_date else "客戶交期"
+                elif o.delivery:
+                    eff_date, eff_src = o.delivery, "預計出貨"
+                elif o.demand_date:
+                    eff_date, eff_src = o.demand_date, "客戶交期"
+
+                lu = last_order_update(s, o.id) if 'last_order_update' in globals() else None
+
+                tasks.append({
+                    "order": o,
+                    "task": t,
+                    "plan_date": plan_date,
+                    "sequence": seq,
+                    "effective_due": eff_date,
+                    "effective_due_src": eff_src,
+                    "last_update": lu,
+                })
 
         return render_template(
             "stations.html",
@@ -956,12 +994,16 @@ def stations_today():
             tasks=tasks,
             station_list=stations,
             selected_group=group,
-            today_date=day,  # for header display
+            today_date=today_yyyy_mm_dd(),
+            rolling=rolling,
+            sort=sort,
         )
+
 
 @app.route("/stations/backlog")
 def stations_backlog():
     group = (request.args.get("group") or "").strip()
+    sort  = (request.args.get("sort") or "due").strip()   # "due" | "fifo"
 
     with SessionLocal() as s:
         stations = station_names(s)
@@ -970,31 +1012,54 @@ def stations_backlog():
 
         tasks = []
         if group:
-            # all open tasks for this station (exclude finished & archived orders)
-            q_open = (
+            eff = effective_due_expr()
+            q = (
                 s.query(Task)
                  .join(Order, Order.id == Task.order_id)
                  .filter(Task.group == group)
-                 .filter(func.coalesce(Task.quantity, 0) - func.coalesce(Task.completed, 0) > 0)
+                 .filter((Task.quantity.isnot(None)) & (Task.quantity > (Task.completed or 0)))
+                 .filter(or_(Order.archived == None, Order.archived == 0))
             )
-            # if your Order has is_archived flag, keep this filter:
-            if hasattr(Order, "is_archived"):
-                q_open = q_open.filter(func.coalesce(Order.is_archived, 0) == 0)
 
-            # simple ordering: by order id then task id
-            for t in q_open.order_by(Order.id.asc(), Task.id.asc()).all():
-                it = make_item(s, t)
-                if it:
-                    tasks.append(it)
+            if sort == "due":
+                # Use julianday so past dates (earlier) come first; push NULLs last
+                q = q.order_by(*effective_due_orderby_asc(), Order.id.asc())
+            else:
+                q = q.order_by(Order.id.asc())
+
+            for t in q.all():
+                if remaining_of(t) <= 0:
+                    continue
+                o = s.get(Order, t.order_id)
+                # effective due + source label
+                eff_date, eff_src = None, None
+                if o.delivery and o.demand_date:
+                    eff_date = min(o.delivery, o.demand_date)
+                    eff_src = "預計出貨" if o.delivery <= o.demand_date else "客戶交期"
+                elif o.delivery:
+                    eff_date, eff_src = o.delivery, "預計出貨"
+                elif o.demand_date:
+                    eff_date, eff_src = o.demand_date, "客戶交期"
+
+                # latest update across the order (optional; keep if you already have)
+                lu = last_order_update(s, o.id) if 'last_order_update' in globals() else None
+
+                tasks.append({
+                    "order": o,
+                    "task": t,
+                    "effective_due": eff_date,
+                    "effective_due_src": eff_src,
+                    "last_update": lu,
+                })
 
         return render_template(
             "stations.html",
             page_mode="backlog",
-            day=today_yyyy_mm_dd(),
             tasks=tasks,
             station_list=stations,
             selected_group=group,
             today_date=today_yyyy_mm_dd(),
+            sort=sort,
         )
 
 @app.route("/stations/plan", methods=["POST"])
@@ -1087,6 +1152,58 @@ def stations_unplan():
         s.commit()
     return jsonify(success=True, station=station, date=day,
                    removed=removed, missing=missing)
+
+def last_order_update(session, order_id):
+    """
+    Latest TaskHistory across all tasks of an order.
+    Returns dict: {from_group, timestamp(ISO), delta or None}
+    """
+    row = (
+        session.query(TaskHistory, Task.group)
+        .join(Task, TaskHistory.task_id == Task.id)
+        .filter(Task.order_id == order_id)
+        .order_by(TaskHistory.timestamp.desc())
+        .first()
+    )
+    if not row:
+        return None
+    h, from_group = row
+    # TaskHistory may or may not have 'delta' set (e.g., stop events)
+    delta = getattr(h, "delta", None)
+    return {
+        "from_group": from_group or "",
+        "timestamp": iso(h.timestamp),
+        "delta": delta,
+    }
+
+def remaining_of(task_obj):
+    """Convenience: remaining quantity for a task."""
+    q = task_obj.quantity or 0
+    c = task_obj.completed or 0
+    return max(0, q - c)
+
+def effective_due_expr():
+    """
+    DB-level expression: earliest non-empty of delivery / demand_date.
+    Normalizes '' -> NULL and casts to DATE so comparisons & sorting work,
+    including past dates.
+    """
+    dlv = func.date(func.nullif(Order.delivery, ""))       # TEXT '' -> NULL, then DATE
+    dem = func.date(func.nullif(Order.demand_date, ""))    # same for demand_date
+
+    return case(
+        (and_(dlv.isnot(None), dem.isnot(None), dlv <= dem), dlv),
+        (and_(dlv.isnot(None), dem.isnot(None), dem < dlv), dem),
+        (dlv.isnot(None), dlv),
+        (dem.isnot(None), dem),
+        else_=None
+    )
+
+def effective_due_orderby_asc():
+    eff = effective_due_expr()
+    # SQLite trick: ORDER BY (eff IS NULL) puts NULLs last (0 for non-null, 1 for null)
+    return asc(case((eff.is_(None), 1), else_=0)), asc(func.julianday(eff))
+
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -540,6 +540,19 @@
           <span class="today">Today: {{ today_date }}</span>
         </div>
       </div>
+      {% if page_mode == 'backlog' %}
+        <div class="toolbar">
+          <strong>Sort:</strong>
+          <a href="?group={{ selected_group }}&sort=due" class="{{ 'active' if sort=='due' else '' }}">Effective due</a>
+          <a href="?group={{ selected_group }}&sort=fifo" class="{{ 'active' if sort=='fifo' else '' }}">FIFO</a>
+        </div>
+      {% elif page_mode == 'today' %}
+        <div class="toolbar">
+          <strong>Sort:</strong>
+          <a href="?group={{ selected_group }}&rolling={{ 1 if rolling else 0 }}&sort=seq" class="{{ 'active' if sort=='seq' else '' }}">By plan order</a>
+          <a href="?group={{ selected_group }}&rolling={{ 1 if rolling else 0 }}&sort=due" class="{{ 'active' if sort=='due' else '' }}">Effective due</a>
+        </div>
+      {% endif %}
       <div class="toolbar">
         <div class="group">
           {% set form_action = '/stations/today' if page_mode == 'today' else '/stations/backlog' %}
@@ -552,7 +565,7 @@
               {% endfor %}
             </select>
             {% if page_mode == 'today' %}
-              <input type="date" name="date" value="{{ day }}" onchange="this.form.submit()">
+              <input id="plan-date" type="date" name="date" value="{{ day }}" onchange="this.form.submit()">
             {% endif %}
           </form>
           {% if page_mode == 'backlog' %}
@@ -571,12 +584,14 @@
         <thead>
           <tr>
             <th onclick="sortStationTable(0)">Progress ↑↓</th>
-            <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
-            <th onclick="sortStationTable(2)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
-            <th onclick="sortStationTable(3)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
-            <th onclick="sortStationTable(4)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
-            <th onclick="sortStationTable(5)">製令數量 ↑↓<span class="print-label"><br>Jumlah Pesanan</span></th>
-            <th onclick="sortStationTable(6)">作業內容 ↑↓<span class="print-label"><br>Isi Pekerjaan</span></th>
+            <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Ekspektasi Pengiriman oleh Tamu</span></th>
+            <th onclick="sortStationTable(2)">預計出貨 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
+            <th>Effective due</th>
+            <th onclick="sortStationTable(3)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
+            <th onclick="sortStationTable(4)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
+            <th onclick="sortStationTable(5)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
+            <th onclick="sortStationTable(6)">製令數量 ↑↓<span class="print-label"><br>Jumlah Pesanan</span></th>
+            <th onclick="sortStationTable(7)">作業內容 ↑↓<span class="print-label"><br>Isi Pekerjaan</span></th>
             <th>注意事項<br><span class="print-label">Hal yang Perlu Diperhatikan</span></th>
             <th onclick="sortStationTable(8)">已完成 ↑↓</th>
             <th onclick="sortStationTable(9)">剩下 ↑↓<span class="print-label"><br>Jumlah Proyek</span></th>
@@ -604,7 +619,16 @@
               </div>
               <div class="row-flash" id="rowflash-{{ item.task.id }}"></div>
             </td>
-            <td>{{ item.order.demand_date }}</td>
+            <td>{{ item.order.demand_date or '—' }}</td>
+            <td>{{ item.order.delivery or '—' }}</td>
+            <td>
+              {% if item.effective_due %}
+                {{ item.effective_due }}
+                <span class="pill muted">(from {{ item.effective_due_src }})</span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
             <td>{{ item.order.manufacture_code }}</td>
             <td>{{ item.order.customer }}</td>
             <td>{{ item.order.product }}</td>
@@ -659,7 +683,15 @@
               </div>
               {% set rem = (item.task.quantity or 0) - (item.task.completed or 0) %}
               <div class="muted" data-remaining>
-                剩餘：{{ rem if rem > 0 else 0 }}
+                {% if item.last_update %}
+                來自 {{ item.last_update.from_group or '—' }}
+                · {{ (item.last_update.timestamp or '')[:16].replace('T', ' ') }}
+                {% if item.last_update.delta is not none and item.last_update.delta != 0 %}
+                  (+{{ item.last_update.delta }})
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
               </div>
             </td>
             {% if page_mode == 'backlog' %}
