@@ -376,8 +376,8 @@
             <div class="progress-fill" style="width: {{ (done/total)*100 }}%"></div>
           </div>
         </td>
-        <td>{{ o.demand_date }}</td>
-        <td>{{ o.delivery }}</td>
+        <td>{{ o.demand_date|fmtdate or '—' }}</td>
+        <td>{{ o.delivery|fmtdate or '—' }}</td>
         <td>{{ o.manufacture_code }}</td>
         <td>{{ o.customer }}</td>
         <td>{{ o.product }}</td>
@@ -446,7 +446,9 @@
                     <button class="btn" onclick="showHistory({{ t.id }}, {{ o.id }})">History</button>
                     <button class="btn" onclick="editTask({{ t.id }}, {{ o.id }}, '{{ t.group }}', '{{ t.task }}', {{ t.quantity }})">Edit</button>
                     <button class="btn red" onclick="deleteTask({{ t.id }}, {{ o.id }})">Delete</button>
-                    <button type="button" class="btn gray" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
+                    <button type="button" class="btn gray" title="Stop the process" onclick="stopTask({{ t.id }})" {{ '' if t.running else 'disabled' }}>Stop</button>
+                    <button type="button" class="btn" title="加入該該站的今日計畫" onclick="planFromMain({{ t.id }}, '{{ t.group }}')" {{ 'disabled' if (t.remaining|int) <= 0 else '' }}>+ Plan</button>
+                    <span id="planned-flag-{{ t.id }}" class="pill success" style="margin-left:6px; {{ '' if (t.id in planned_today_ids) else 'display:none' }}" >已在今日計畫</span>
                   </div>
                 </td>
               </tr>

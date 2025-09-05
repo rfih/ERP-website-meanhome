@@ -60,20 +60,22 @@ def order_progress(order):
     done_q = sum((t.completed or 0) for t in order.tasks)
     return (done_q, total_q)
 
+from datetime import date
+from sqlalchemy.sql import func
+
 @app.route("/")
 def home():
     qtext = (request.args.get("q") or "").strip()
-    dfield = (request.args.get("dfield") or "any").strip()   # any | demand | delivery | datecreate
+    dfield = (request.args.get("dfield") or "any").strip()
     dfrom  = (request.args.get("dfrom")  or "").strip()
     dto    = (request.args.get("dto")    or "").strip()
 
     df = _ymd_digits(dfrom)
     dt = _ymd_digits(dto)
     if df and not dt:
-        dt = df  # single-day filter if only start is provided
+        dt = df
 
     def norm_col(col):
-        # turn 'YYYY/MM/DD' or 'YYYY-MM-DD' into 'YYYYMMDD' on the SQL side
         return func.replace(func.replace(col, '-', ''), '/', '')
 
     def date_cond_for(col):
@@ -82,7 +84,9 @@ def home():
         if df: preds.append(c >= df)
         if dt: preds.append(c <= dt)
         return and_(*preds) if preds else None
-    today = datetime.today().strftime("%Y/%m/%d")
+
+    today_iso = date.today().isoformat()  # <<< use ISO: YYYY-MM-DD
+
     with SessionLocal() as session:
         q = (session.query(Order)
              .filter(or_(Order.archived == False, Order.archived.is_(None))))
@@ -99,8 +103,7 @@ def home():
                        Task.group.ilike(kw)
                    ))
                    .distinct())
-        
-        # date filter (NEW)
+
         if df or dt:
             if dfield == "demand":
                 cond = date_cond_for(Order.demand_date)
@@ -111,7 +114,7 @@ def home():
             elif dfield == "datecreate":
                 cond = date_cond_for(Order.datecreate)
                 if cond is not None: q = q.filter(cond)
-            else:  # any
+            else:
                 conds = [c for c in [
                     date_cond_for(Order.demand_date),
                     date_cond_for(Order.delivery),
@@ -125,6 +128,31 @@ def home():
         vm = []
         for o in orders:
             done_q, total_q = order_progress(o)
+
+            sub_rows = []
+            for t in o.tasks:
+                # normalize StationSchedule.plan_date to DATE in SQL, compare with today
+                planned_today = session.query(StationSchedule.id).filter(
+                    StationSchedule.task_id == t.id,
+                    func.date(
+                        func.replace(func.replace(StationSchedule.plan_date, '/', '-'), '.', '-')
+                    ) == today_iso
+                ).first() is not None
+
+                sub_rows.append({
+                    "id": t.id,
+                    "group": t.group or "",
+                    "task": t.task or "",
+                    "quantity": t.quantity or 0,
+                    "completed": t.completed or 0,
+                    "remaining": max(0, (t.quantity or 0) - (t.completed or 0)),
+                    "running": bool(getattr(t, "start_time", None) and not getattr(t, "stop_time", None)),
+                    "started_at": (t.start_time.isoformat() if getattr(t, "start_time", None) else None),
+                    "planned_today": planned_today,   # <<< NEW
+                })
+
+            assigned_today = assigned_groups_for_order_today(session, o.id, today_iso)
+            
             vm.append({
                 "id": o.id,
                 "manufacture_code": o.manufacture_code or "",
@@ -137,22 +165,18 @@ def home():
                 "fengbian": o.fengbian or "",
                 "wallpaper": o.wallpaper or "",
                 "jobdesc": o.jobdesc or "",
-                "active_groups": ", ".join(recalc_active_groups(o)),
+                "assigned_groups": "、".join(assigned_today),
                 "progress": (done_q, total_q),
-                "sub_tasks": [
-                    {
-                        "id": t.id,
-                        "group": t.group or "",
-                        "task": t.task or "",
-                        "quantity": t.quantity or 0,
-                        "completed": t.completed or 0,
-                        "remaining": max(0, (t.quantity or 0) - (t.completed or 0)),
-                        "running": bool(getattr(t, "start_time", None) and not getattr(t, "stop_time", None)),
-                        "started_at": (t.start_time.isoformat() if getattr(t, "start_time", None) else None),
-                    } for t in o.tasks
-                ]
+                "sub_tasks": sub_rows,
             })
-        return render_template("index.html", orders=vm, today_date=today, archived_page=False, qtext=qtext)
+
+        return render_template(
+            "index.html",
+            orders=vm,
+            today_date=today_iso,
+            archived_page=False,
+            qtext=qtext
+        )
     
 @app.route("/archived")
 def archived_page():
@@ -1203,6 +1227,45 @@ def effective_due_orderby_asc():
     eff = effective_due_expr()
     # SQLite trick: ORDER BY (eff IS NULL) puts NULLs last (0 for non-null, 1 for null)
     return asc(case((eff.is_(None), 1), else_=0)), asc(func.julianday(eff))
+
+def fmtdate(val):
+    """Return YYYY-MM-DD for date-like values; empty string if missing."""
+    if not val:
+        return ""
+    # Native date/datetime
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val.strftime("%Y-%m-%d")
+    if isinstance(val, datetime):
+        return val.date().strftime("%Y-%m-%d")
+    # String inputs
+    s = str(val).strip()
+    if not s:
+        return ""
+    # common formats
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    # generic fallback: first 10 chars if it looks like an ISO-like date
+    return s[:10]
+
+# Register as Jinja filter
+app.jinja_env.filters["fmtdate"] = fmtdate
+
+def assigned_groups_for_order_today(session, order_id, day_iso=None):
+    """Return a list of station names that this order is planned for on day_iso."""
+    day_iso = day_iso or date.today().isoformat()
+    rows = (
+        session.query(StationSchedule.station)
+        .join(Task, StationSchedule.task_id == Task.id)
+        .filter(Task.order_id == order_id)
+        # normalize any stored formats to ISO date for comparison
+        .filter(func.date(func.replace(func.replace(StationSchedule.plan_date, '/', '-'), '.', '-')) == day_iso)
+        .distinct()
+        .all()
+    )
+    return [r[0] for r in rows]
 
 
 if __name__ == "__main__":

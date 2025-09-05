@@ -904,3 +904,41 @@ function taskRemaining(taskId){
 function isFinished(taskId){
   return taskRemaining(taskId) <= 0; // 0 or negative treated as finished
 }
+
+// Plan a single task from the main orders page (index.html)
+// station: task's group; day optional ("YYYY-MM-DD"), defaults to today
+function planFromMain(taskId, station, day){
+  const date = (day || '').trim() || new Date().toISOString().slice(0,10);
+
+  fetch('/stations/plan', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ station, date, task_ids: [taskId] })
+  })
+  .then(r=>r.json())
+  .then(j=>{
+    if(!j.success){ alert(j.message || '規劃失敗'); return; }
+
+    const addedCount   = (j.added||[]).length;
+    const skipped      = (j.skipped||[]);
+    const skippedFin   = skipped.filter(x=>x.reason==='finished').length;
+    const skippedExist = skipped.filter(x=>x.reason==='exists').length;
+
+    const msg = [
+      addedCount ? `已加入 ${addedCount} 筆` : '',
+      skippedFin ? `略過 ${skippedFin}（已完成）` : '',
+      skippedExist ? `略過 ${skippedExist}（已在今日）` : ''
+    ].filter(Boolean).join('，');
+    if (typeof toast === 'function') toast(msg || '完成');
+
+    if (addedCount > 0 || skippedExist > 0){
+      const btn = document.getElementById(`plan-btn-${taskId}`);
+      if (btn) btn.disabled = true;
+      const flag = document.getElementById(`planned-flag-${taskId}`);
+      if (flag){ flag.style.display = 'inline-block'; flag.textContent = '已在今日計畫'; }
+    }
+  })
+  .catch(()=> alert('規劃失敗'));
+}
+
+

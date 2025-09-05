@@ -619,15 +619,13 @@
               </div>
               <div class="row-flash" id="rowflash-{{ item.task.id }}"></div>
             </td>
-            <td>{{ item.order.demand_date or '—' }}</td>
-            <td>{{ item.order.delivery or '—' }}</td>
+            <td>{{ item.order.demand_date|fmtdate or '—' }}</td>
+            <td>{{ item.order.delivery|fmtdate or '—' }}</td>
             <td>
               {% if item.effective_due %}
-                {{ item.effective_due }}
+                {{ item.effective_due|fmtdate }}
                 <span class="pill muted">(from {{ item.effective_due_src }})</span>
-              {% else %}
-                —
-              {% endif %}
+              {% else %} — {% endif %}
             </td>
             <td>{{ item.order.manufacture_code }}</td>
             <td>{{ item.order.customer }}</td>
