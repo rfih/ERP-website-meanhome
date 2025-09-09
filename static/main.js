@@ -941,4 +941,19 @@ function planFromMain(taskId, station, day){
   .catch(()=> alert('規劃失敗'));
 }
 
+function openModal(id){          // id = 'modal-order', 'modal-import', etc.
+  const m = document.getElementById(id);
+  if (m) m.classList.add('open');
+  const key = id.replace(/^modal-/, '');
+  const o = document.getElementById('overlay-' + key);
+  if (o) o.classList.add('open');
+}
+function closeModal(id){
+  const m = document.getElementById(id);
+  if (m) m.classList.remove('open');
+  const key = id.replace(/^modal-/, '');
+  const o = document.getElementById('overlay-' + key);
+  if (o) o.classList.remove('open');
+}
+
 

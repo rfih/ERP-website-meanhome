@@ -5,6 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Live Order Status (Starter)</title>
   <link rel="stylesheet" href="/static/common.css">
+  <style>
+  /* Hide all modals by default */
+  .orders-page [id^="modal-"]{ display:none; }
+
+  /* Keep the centering/layering */
+  .orders-page [id^="modal-"]{
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1001;
+    background:#fff; border:1px solid var(--border); border-radius:8px;
+    width:min(780px,96vw); max-height:90vh; overflow:auto; padding:14px;
+    box-shadow:0 12px 32px rgba(0,0,0,.25);
+  }
+
+  /* Optional backdrop (if you have #overlay-... elements) */
+  .orders-page [id^="overlay-"]{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1000; }
+
+  /* Inputs & footer inside modal */
+  .orders-page [id^="modal-"] input[type="text"],
+  .orders-page [id^="modal-"] input[type="date"],
+  .orders-page [id^="modal-"] select,
+  .orders-page [id^="modal-"] textarea{ width:100%; height:32px; font-size:13px; padding:6px 10px; margin-bottom:6px; }
+  .orders-page [id^="modal-"] textarea{ height:80px; }
+  .orders-page [id^="modal-"] .footer{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+  .orders-page .modal{ display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:1001; background:#fff; border:1px solid var(--border); border-radius:8px;
+  width:min(780px,96vw); max-height:90vh; overflow:auto; padding:14px; box-shadow:0 12px 32px rgba(0,0,0,.25); }
+  .orders-page .modal.open{ display:block; }
+
+  .orders-page .modal-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:1000; }
+  .orders-page .modal-overlay.open{ display:block; }
+
+  .orders-page .modal input[type="text"],
+  .orders-page .modal input[type="date"],
+  .orders-page .modal select,
+  .orders-page .modal textarea{ width:100%; height:32px; font-size:13px; padding:6px 10px; margin-bottom:6px; }
+  .orders-page .modal textarea{ height:80px; }
+  .orders-page .modal .footer{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+  </style>
   <script defer src="/static/main.js"></script>
 </head>
 <body class="orders-page">
@@ -75,21 +114,23 @@
   </div>
   <!-- Content -->
     <table>
-      <tr>
-        <th>Progress</th>
-        <th>客戶交期</th>
-        <th>預計出貨</th>
-        <th>製令號碼</th>
-        <th>專案名稱</th>
-        <th>產品名稱</th>
-        <th>數量</th>
-        <th>派單日</th>
-        <th>封邊</th>
-        <th>面飾</th>
-        <th>作業內容</th>
-        <th>現場組別</th>
-        <th>Actions</th>
-      </tr>
+      <thead>
+        <tr>
+          <th>Progress</th>
+          <th>客戶交期</th>
+          <th>預計出貨</th>
+          <th>製令號碼</th>
+          <th>專案名稱</th>
+          <th>產品名稱</th>
+          <th>數量</th>
+          <th>派單日</th>
+          <th>封邊</th>
+          <th>面飾</th>
+          <th>作業內容</th>
+          <th>現場組別</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
       {% for o in orders %}
       <tr id="order-{{o.id}}"
         data-demand="{{ o.demand_date|e }}"
@@ -207,6 +248,7 @@
   <div id="modal-import" class="modal" onclick="if(event.target===this) closeModal('modal-import')">
     <div class="panel">
       <h3 style="margin:0">Import Orders (Excel .xlsx)</h3>
+      <button class="btn" onclick="closeModal('modal-order')">Close</button>
       <input type="file" id="import-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="margin-top:10px">
       <div style="margin-top:8px">
         <input id="import-sheet" placeholder="工作表名稱 (例如: 生產中門框)" value="生產中門框" />
