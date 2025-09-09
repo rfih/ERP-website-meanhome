@@ -1,0 +1,94 @@
+:root{
+  --primary:#007bff; --primary-dark:#0069d9;
+  --success:#28a745; --danger:#dc3545; --warning:#ffc107;
+  --muted:#6c757d; --bg:#ededf0; --border:#e9ecef;
+}
+
+/* Base */
+body{font-family:Arial,sans-serif;background:var(--bg);margin:20px;font-size:14px}
+h1,h2{color:#333;margin:0 0 8px}
+nav a{margin-right:15px;font-weight:bold;color:#333;text-decoration:none;font-size:15px}
+
+/* Layout */
+.layout{display:flex;min-height:100vh;gap:16px}
+.sidebar{
+  width:280px;background:#fff;border-right:1px solid var(--border);
+  padding:14px;position:sticky;top:0;height:calc(100vh - 40px);overflow:auto;
+}
+.content{flex:1;min-width:0;padding:0 16px}
+.brand{font-weight:700;font-size:16px;margin-bottom:6px}
+
+/* Sidebar form */
+.sbm{display:grid;grid-template-columns:1fr;gap:6px}
+.sbm input[type="text"],.sbm select,.sbm input[type="date"]{padding:6px 10px;font-size:13px;height:32px;width:100%}
+.sbm .row{display:flex;gap:6px}
+.caption{color:var(--muted);font-size:12px}
+
+/* Sidebar toggle / overlay (single source of truth) */
+.hamburger{display:inline-flex;align-items:center;gap:6px;position:sticky;top:10px;margin-bottom:10px;z-index:6}
+.overlay{display:none;pointer-events:none}
+@media (max-width:900px){
+  .sidebar{position:fixed;left:-300px;top:0;height:100vh;z-index:20;transition:left .2s ease}
+  .sidebar.open{left:0}
+  .overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.2);z-index:15}
+}
+@media (min-width:901px){
+  body.sb-collapsed .sidebar{
+    flex:0 0 0 !important;flex-basis:0 !important;width:0 !important;
+    padding:0 !important;margin:0 !important;border:0 !important;overflow:hidden !important;pointer-events:none !important;
+  }
+  body.sb-collapsed .content{padding-left:0 !important}
+}
+
+/* Toolbar */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin:6px 0 8px}
+.page-header .left{display:flex;align-items:center;gap:12px}
+.page-header .right{color:#6b7280;font-size:12px;white-space:nowrap}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:6px 0 12px}
+.toolbar .group{display:flex;align-items:center;gap:8px}
+
+/* Buttons */
+.btn{padding:10px 12px;border:0;border-radius:4px;color:#fff;background:var(--primary);cursor:pointer}
+.btn:hover{background:var(--primary-dark)}
+.btn.gray{background:#6c757d}
+.btn.red{background:var(--danger)}
+.btn.outline{background:#fff;color:var(--primary);border:1px solid var(--primary)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;margin-top:12px}
+th,td{border:1px solid #ddd;padding:10px 12px;text-align:center}
+thead th{background:var(--primary);color:#fff;border-color:var(--primary-dark);font-weight:600}
+tbody tr:nth-child(even) td{background:#f8fafc}
+
+/* Progress */
+.progress-bar{width:100%;height:10px;background:#e0e0e0;border-radius:6px;overflow:hidden}
+.progress-fill{height:100%;background:var(--success);transition:width .3s}
+.progress-fill.running{
+  position:relative;
+  background-image:linear-gradient(45deg,rgba(255,255,255,.25) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.25) 50%,rgba(255,255,255,.25) 75%,transparent 75%,transparent);
+  background-size:16px 16px;animation:prog-stripes 1s linear infinite
+}
+@keyframes prog-stripes{from{background-position:0 0}to{background-position:16px 0}}
+
+/* Row highlight */
+tr.is-running{outline:2px solid var(--warning);outline-offset:-2px}
+
+/* Actions column */
+.actions-col{min-width:300px;white-space:normal;overflow:visible}
+.actions-group{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.actions-group .btn{flex:0 0 auto}
+
+/* Print */
+.print-only{display:none;font-size:12px;color:#666}
+.screen-only{display:block}
+.print-label{display:none;font-size:10px;color:#999}
+@media print{
+  .screen-only,.sidebar,.hamburger,.toolbar,.page-header,.overlay,nav,form,.no-print{display:none !important}
+  body{background:#fff;margin:0;padding:10px;font-size:12px}
+  table{border-radius:0}
+  th,td{font-size:12px;border:1px solid #999;padding:6px}
+  .progress-bar{display:none}
+  .print-only{display:table-cell !important;border:1px solid #999;min-height:10px}
+  .print-label{display:block}
+  @page{margin:10mm}
+}

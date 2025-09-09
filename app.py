@@ -152,6 +152,14 @@ def home():
                 })
 
             assigned_today = assigned_groups_for_order_today(session, o.id, today_iso)
+            today_set, carry_set = assigned_groups_for_order_rolling(session, o.id, today_iso)
+            # Build display: today first, then carryover with label
+            assigned_list = []
+            for g in sorted(today_set):
+                if g: assigned_list.append(g)
+            for g in sorted(carry_set - today_set):
+                if g: assigned_list.append(f"{g}（延續）")
+            assigned_groups_disp = "、".join(assigned_list)
             
             vm.append({
                 "id": o.id,
@@ -165,7 +173,7 @@ def home():
                 "fengbian": o.fengbian or "",
                 "wallpaper": o.wallpaper or "",
                 "jobdesc": o.jobdesc or "",
-                "assigned_groups": "、".join(assigned_today),
+                "assigned_groups": assigned_groups_disp,
                 "progress": (done_q, total_q),
                 "sub_tasks": sub_rows,
             })
@@ -1267,6 +1275,49 @@ def assigned_groups_for_order_today(session, order_id, day_iso=None):
     )
     return [r[0] for r in rows]
 
+def _iso_day(val):
+    """Return 'YYYY-MM-DD' string or ''."""
+    if not val:
+        return ""
+    if isinstance(val, date) and not isinstance(val, datetime):
+        return val.isoformat()
+    if isinstance(val, datetime):
+        return val.date().isoformat()
+    s = str(val).strip().replace("/", "-").replace(".", "-")
+    return s[:10] if len(s) >= 10 else ""
+
+def assigned_groups_for_order_rolling(session, order_id, today_iso=None):
+    """
+    Return (today_set, carryover_set) of station names for this order:
+      - today_set: planned on today
+      - carryover_set: planned on a past day and still unfinished
+    """
+    today_iso = today_iso or date.today().isoformat()
+    rows = (
+        session.query(StationSchedule.station,
+                      StationSchedule.plan_date,
+                      Task.quantity, Task.completed)
+        .join(Task, StationSchedule.task_id == Task.id)
+        .filter(Task.order_id == order_id)
+        .all()
+    )
+
+    today_set, carry_set = set(), set()
+    for station, plan_date, qty, comp in rows:
+        qty = qty or 0
+        comp = comp or 0
+        if qty <= comp:  # finished -> not active
+            continue
+        day_iso = _iso_day(plan_date)
+        if not day_iso:
+            continue
+        if day_iso == today_iso:
+            today_set.add(station or "")
+        elif day_iso < today_iso:
+            carry_set.add(station or "")
+        # (future-dated plans are ignored for this column)
+
+    return today_set, carry_set
 
 if __name__ == "__main__":
     app.run(debug=True)
