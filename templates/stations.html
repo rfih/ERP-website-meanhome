@@ -168,7 +168,7 @@
     
   </script>
 </head>
-<body class="stations-page">
+<body class="stations-page sb-collapsed">
   <div class="layout">
     <aside class="sidebar" id="sidebar">
       <div class="brand">Search</div>
@@ -270,14 +270,26 @@
           <button type="button" onclick="printPage()">🖨️ Print This Station</button>
         </div>
       </div>
-
+      
+      <div class="print-only print-header">
+        <table class="ph">
+          <tr>
+            <td class="lab">生產排程：</td>
+            <td class="val">{{ request.args.get('group','') or '________' }}</td>
+            <td class="lab r">排程日：</td>
+            <td class="val">{{ request.args.get('date','') or today_date }}</td>
+            <td class="lab r">人員 Pekerja：</td>
+            <td class="val">________________</td>
+          </tr>
+        </table>
+      </div>
       <table>
         <thead>
           <tr>
+            <th>Effective due</th>
             <th onclick="sortStationTable(0)">Progress ↑↓</th>
             <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Ekspektasi Pengiriman oleh Tamu</span></th>
             <th onclick="sortStationTable(2)">預計出貨 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
-            <th>Effective due</th>
             <th onclick="sortStationTable(3)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
             <th onclick="sortStationTable(4)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
             <th onclick="sortStationTable(5)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
@@ -398,21 +410,19 @@
     </main>
   </div>
 
-<div id="historyModal" class="modal">
-  <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
-  <h3>Update History</h3>
-  <ul id="historyContent"></ul>
-</div>
-<div id="modal-history" class="modal" onclick="if(event.target===this) closeModal('modal-history')">
-  <div class="panel">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <h3 style="margin:0">Task History</h3>
-      <button class="btn" onclick="closeModal('modal-history')">Close</button>
-    </div>
-    <div id="history-content" style="max-height:100vh;overflow:auto;margin-top:8px"></div>
+<!-- History overlay (separate from sidebar overlay) -->
+<div id="overlay-history" class="modal-overlay" onclick="closeHistory()"></div>
+
+<!-- Single History modal -->
+<div id="modal-history" class="modal" role="dialog" aria-modal="true" aria-labelledby="hist-title">
+  <div class="m-header" id="hist-title">Task History</div>
+  <div class="m-body">
+    <div id="history-content">Loading…</div>
+  </div>
+  <div class="m-footer">
+    <button class="btn gray" type="button" onclick="closeHistory()">Close</button>
   </div>
 </div>
-<div class="overlay" id="overlay"></div>
 
 
 <script src="/static/main.js?v=3" defer></script>

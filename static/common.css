@@ -207,8 +207,8 @@ input:focus, select:focus, textarea:focus{
 /* 1) NOTES column (10th) — stop the “offside” and inner X-scroll */
 .stations-page thead th:nth-child(10),
 .stations-page tbody td:nth-child(10){
-  width: 280px;          /* tweak: 240–320px to taste */
-  max-width: 280px;
+  width: 150px;          /* tweak: 240–320px to taste */
+  max-width: 150px;
 }
 
 .stations-page tbody td:nth-child(10){ padding-right: 8px; }
@@ -219,7 +219,8 @@ input:focus, select:focus, textarea:focus{
   max-width: 100% !important;
   box-sizing: border-box !important;
   margin: 0;
-  min-height: 56px;
+  height: auto;
+  min-height: 30px;
   overflow-x: hidden;     /* kill the tiny horizontal bar */
   overflow-y: auto;
   resize: vertical;
@@ -236,3 +237,99 @@ input:focus, select:focus, textarea:focus{
 .stations-page table,
 .stations-page th,
 .stations-page td{ box-sizing: border-box; }
+
+/* Stations: 已完成 column (11th) */
+.stations-page thead th:nth-child(11),
+.stations-page tbody td:nth-child(11){
+  width: 110px;          /* <-- column width */
+  max-width: 110px;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* The number input inside 已完成 */
+.stations-page tbody td:nth-child(11) input[type="number"]{
+  width: 80px;           /* <-- input box width */
+  height: 32px;          /* <-- input box height */
+  text-align: center;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Stations modals ---- */
+.stations-page .modal{
+  display:none;
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  z-index:1001;
+  background:#fff; border:1px solid var(--border); border-radius:10px;
+  width:min(820px,96vw); max-height:88vh; box-shadow:0 18px 40px rgba(0,0,0,.35);
+}
+.stations-page .modal.open{ display:block; }
+
+.stations-page .modal-overlay{
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,.45); backdrop-filter: blur(2px);
+  z-index:1000;
+}
+.stations-page .modal-overlay.open{ display:block; }
+
+.stations-page .m-header{ padding:12px 16px; font-weight:700; border-bottom:1px solid var(--border); }
+.stations-page .m-body{ padding:14px 16px; overflow:auto; max-height:calc(88vh - 56px - 56px); }
+.stations-page .m-footer{ padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; position:sticky; bottom:0; background:#fff; }
+
+body.modal-open{ overflow:hidden; } /* prevent background scroll when a modal is open */
+
+/* ===== Stations print layout (final) ===== */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+
+  /* make the table fill the sheet */
+  .stations-page table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; font-size: 12px; }
+  .stations-page th, .stations-page td { border: 1.5pt solid #000; padding: 6px; color: #000; }
+
+  /* show the print-only columns and hide screen-only bits */
+  .print-only  { display: table-cell !important; }
+  .screen-only { display: none !important; }
+
+  /* hide UI chrome on paper */
+  .toolbar, .sidebar, .hamburger, .task-status, .actions-group { display: none !important; }
+
+  /* HIDE columns you don't want on paper:
+     1=Progress, 4=Effective due, 11=已完成, 13=最後更新, 14=Actions, 15=checkbox(if exists)
+     (indexes based on your stations table header order)
+  */
+  .stations-page thead th:nth-child(1),
+  .stations-page tbody td:nth-child(1),
+  .stations-page thead th:nth-child(4),
+  .stations-page tbody td:nth-child(4),
+  .stations-page thead th:nth-child(11),
+  .stations-page tbody td:nth-child(11),
+  .stations-page thead th:nth-child(13),
+  .stations-page tbody td:nth-child(13),
+  .stations-page thead th.actions-col,
+  .stations-page tbody td.actions-col,
+  .stations-page thead th input[type="checkbox"],
+  .stations-page tbody td input[type="checkbox"] {
+    display: none !important;
+  }
+
+  /* Notes: print plain text, not the textarea */
+  .stations-page tbody td:nth-child(10) textarea { display: none !important; }
+  .stations-page tbody td:nth-child(10) .print-note { display: block !important; white-space: pre-wrap; }
+
+  /* optional: tidy column widths for a balanced sheet */
+  .stations-page thead th:nth-child(2),    /* 客戶交期 */   .stations-page tbody td:nth-child(2)  { width: 22mm; }
+  .stations-page thead th:nth-child(3),    /* 預計出貨 */   .stations-page tbody td:nth-child(3)  { width: 22mm; }
+  .stations-page thead th:nth-child(5),    /* 製令號碼 */   .stations-page tbody td:nth-child(5)  { width: 28mm; }
+  .stations-page thead th:nth-child(6),    /* 專案名稱 */   .stations-page tbody td:nth-child(6)  { width: 55mm; }
+  .stations-page thead th:nth-child(7),    /* 產品名稱 */   .stations-page tbody td:nth-child(7)  { width: 24mm; }
+  .stations-page thead th:nth-child(8),    /* 製令數量 */   .stations-page tbody td:nth-child(8)  { width: 20mm; text-align:center; }
+  .stations-page thead th:nth-child(9),    /* 作業內容 */   .stations-page tbody td:nth-child(9)  { width: 28mm; }
+  .stations-page thead th:nth-child(10) { width: 58mm; }    /* 注意事項 */
+  .stations-page thead th:nth-child(12),   /* 剩下=計劃數量 */.stations-page tbody td:nth-child(12) { width: 18mm; text-align:center; }
+  /* three extra print columns (良品 / 不良品 / 生產總時間) */
+  .stations-page thead th.print-only, .stations-page tbody td.print-only { width: 22mm; text-align:center; }
+  
+  /* make inputs look like plain text on paper */
+  input, select, textarea { background: transparent !important; border: 0 !important; box-shadow: none !important; outline: 0 !important; }
+}

@@ -164,37 +164,57 @@ function updateOrderProgress(orderId){
 function fmt(dt){ return dt ? new Date(dt).toLocaleString() : '-' }
 
 function showHistory(taskId){
-  openModal("modal-history");
-  const box = document.getElementById("history-content");
-  box.innerHTML = "<p>Loading...</p>";
+  const box = document.getElementById('history-content');
+  if (box) box.textContent = 'Loading…';
 
   fetch(`/task-history/${taskId}`)
     .then(r => r.json())
-    .then(data => {
-      if (!data || !data.length) { box.innerHTML = "<p>No updates recorded yet.</p>"; return; }
+    .then(rows => {
+      if (!Array.isArray(rows) || rows.length === 0){
+        box.innerHTML = '<div style="color:#6c757d">No history</div>';
+      } else {
+        box.innerHTML = rows.map(r => {
+          const ts = (r.timestamp || '').toString().replace('T',' ').slice(0,19);
 
-      let html = "";
-      for (const item of data) {
-        const kind = item.note || "update";
-        const hasRun = kind === "stop"; // completed run
-        const delta = (item.delta !== null && item.delta !== undefined) ? item.delta : null;
-        const pace = (hasRun && item.duration_minutes && delta)
-          ? (delta * 60 / item.duration_minutes).toFixed(1) : null;
+          // NOTE can be "start" | "stop" | "update" | "finish" | "noop" | custom
+          const note = (r.note || '').toLowerCase();
 
-        html += `
-          <div style="padding:8px 10px;border-bottom:1px solid #e5e5e5">
-            ${kind === 'start' ? '動作: start' : kind === 'stop' ? '動作: stop' : '動作: update'}<br>
-            ${delta !== null ? `本次: ${delta}　` : ''}總計: ${item.completed ?? '-'}<br>
-            記錄時間: ${fmt(item.timestamp)}<br>
-            ${hasRun ? `開始時間: ${fmt(item.start_time)}<br>` : ''}
-            ${hasRun ? `結束時間: ${fmt(item.stop_time)}<br>` : ''}
-            ${hasRun ? `所需時間: ${item.duration_minutes ?? '-'} 分鐘${pace ? `（效率: ${pace}/hr）` : ''}` : ''}
-          </div>`;
+          let line;
+          if (note === 'start') {
+            line = 'Start';
+          } else if (note === 'stop') {
+            // show stop; if duration present, show it too
+            const mins = r.duration_minutes ?? r.minutes;
+            line = 'Stop' + (mins != null ? `（本次 ${mins} 分鐘）` : '');
+          } else if (note === 'finish') {
+            const d = (typeof r.delta === 'number' && r.delta !== 0)
+                      ? `（+${r.delta}）` : '';
+            line = `Finish${d}`;
+          } else {
+            // updates: show only the number delta like before, no "變更" text
+            if (typeof r.delta === 'number' && r.delta !== 0) {
+              line = (r.delta > 0 ? `+${r.delta}` : `${r.delta}`);
+            } else {
+              // no delta change: keep a minimal marker
+              line = 'Update';
+            }
+          }
+
+          const by = r.user ? ` · ${r.user}` : '';
+          return `<div style="padding:6px 0; border-bottom:1px solid #eee;">
+                    <div><strong>${ts}</strong>${by}</div>
+                    <div style="color:#333">${line}</div>
+                  </div>`;
+        }).join('');
       }
-      box.innerHTML = html;
+      openHistory();
     })
-    .catch(() => { box.innerHTML = "<p>Error loading history.</p>";});
+    .catch(() => {
+      box.innerHTML = '<div style="color:#dc3545">Failed to load history</div>';
+      openHistory();
+    });
 }
+
 
 function editTask(id, orderId, group, task, quantity) {
   document.getElementById("edit-task-id").value = id;
@@ -954,6 +974,100 @@ function closeModal(id){
   const key = id.replace(/^modal-/, '');
   const o = document.getElementById('overlay-' + key);
   if (o) o.classList.remove('open');
+}
+
+function openHistory(){
+  document.getElementById('modal-history')?.classList.add('open');
+  document.getElementById('overlay-history')?.classList.add('open');
+  document.body.classList.add('modal-open');
+  window.addEventListener('keydown', escCloseHistory, { once:true });
+}
+function closeHistory(){
+  document.getElementById('modal-history')?.classList.remove('open');
+  document.getElementById('overlay-history')?.classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+function escCloseHistory(e){ if (e.key === 'Escape') closeHistory(); }
+
+/* Use this for the History button */
+function showHistory(taskId){
+  const box = document.getElementById('history-content');
+  if (box) box.textContent = 'Loading…';
+
+  fetch(`/task-history/${taskId}`)
+    .then(r => r.json())
+    .then(rows => {
+      if (!Array.isArray(rows) || rows.length === 0){
+        box.innerHTML = '<div style="color:#6c757d">No history</div>';
+      } else {
+        box.innerHTML = rows.map(r => {
+          const ts = (r.timestamp || '').toString().slice(0,19); // already local from server
+          const note = (r.note || '').toLowerCase();
+          const d = (typeof r.delta === 'number' && r.delta !== 0)
+                    ? (r.delta > 0 ? `+${r.delta}` : `${r.delta}`) : '';
+          let line = '';
+
+          if (note === 'start') {
+            line = 'Start';
+          } else if (note === 'stop') {
+            line = 'Stop' + (r.minutes != null ? `（本次 ${r.minutes} 分鐘）` : '');
+          } else if (note === 'finish') {
+            line = 'Finish' + (d ? `（${d}）` : '');
+          } else if (note === 'remove') {
+            line = 'Remove — 僅移除今日計畫';
+          } else if (note === 'plan') {
+            line = 'Plan — 加入今日計畫';
+          } else { // update or anything else
+            line = d || 'Update';
+          }
+
+          const by = r.user ? ` · ${r.user}` : '';
+          return `<div style="padding:6px 0; border-bottom:1px solid #eee;">
+                    <div><strong>${ts}</strong>${by}</div>
+                    <div style="color:#333">${line}</div>
+                  </div>`;
+        }).join('');
+      }
+      openHistory();
+    })
+    .catch(() => {
+      if (box) box.innerHTML = '<div style="color:#dc3545">Failed to load history</div>';
+      openHistory();
+    });
+}
+
+function showHistory(taskId){
+  const box = document.getElementById('history-content');
+  if (box) box.textContent = 'Loading…';
+
+  fetch(`/task-history/${taskId}`)
+    .then(r => r.json())
+    .then(rows => {
+      if (!Array.isArray(rows) || rows.length === 0){
+        box.innerHTML = '<div style="color:#6c757d">No history</div>';
+      } else {
+        box.innerHTML = rows.map(r => {
+          const ts   = (r.timestamp || '').toString().slice(0,19);
+          const note = (r.note || '').toLowerCase();
+          const d    = (typeof r.delta === 'number' && r.delta !== 0)
+                        ? (r.delta > 0 ? `+${r.delta}` : `${r.delta}`) : '';
+          let line = '';
+          if (note === 'start')  line = 'Start';
+          else if (note === 'stop')   line = 'Stop' + (r.minutes != null ? `（本次 ${r.minutes} 分鐘）` : '');
+          else if (note === 'finish') line = 'Finish' + (d ? `（${d}）` : '');
+          else if (note === 'remove') line = 'Remove — 僅移除今日計畫';
+          else if (note === 'plan')   line = 'Plan — 加入今日計畫';
+          else line = d || 'Update';
+          const by = r.user ? ` · ${r.user}` : '';
+          return `<div style="padding:6px 0; border-bottom:1px solid #eee;">
+                    <div><strong>${ts}</strong>${by}</div>
+                    <div style="color:#333">${line}</div>
+                  </div>`;
+        }).join('');
+      }
+      openHistory();
+    })
+    .catch(() => { box.innerHTML = '<div style="color:#dc3545">Failed to load history</div>'; openHistory(); });
 }
 
 

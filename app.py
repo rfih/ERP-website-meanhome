@@ -14,6 +14,22 @@ except ImportError:
 import re, unicodedata
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
+try:
+    from zoneinfo import ZoneInfo                # Python 3.9+
+    LOCAL_TZ = ZoneInfo("Asia/Taipei")           # <- change if needed
+except Exception:
+    LOCAL_TZ = timezone(timedelta(hours=8))      # fallback if tzdata missing
+
+def to_local(dt):
+    """Convert any DB timestamp (str or dt) to local tz."""
+    udt = as_utc(dt)
+    return udt.astimezone(LOCAL_TZ) if udt else None
+
+def ts_local(dt):
+    """Format a DB timestamp for JSON/UI in local time."""
+    ldt = to_local(dt)
+    return ldt.strftime("%Y-%m-%d %H:%M:%S") if ldt else None
+
 def utcnow():
     return datetime.now(timezone.utc)
 
@@ -346,52 +362,25 @@ def get_task(task_id):
 
 @app.route("/update_task", methods=["POST"])
 def update_task():
-    data = request.get_json() or {}
-    task_id = int(data.get("task_id", 0))
-    if not task_id:
-        return jsonify(success=False, message="task_id required"), 400
-
-    # order_id is optional; we’ll infer from the task if not provided
-    order_id = data.get("order_id")
-
+    data = request.get_json()
+    tid = int(data.get("task_id", 0))
     new_completed = int(data.get("completed", 0))
-    note = data.get("note", "")
 
-    now = datetime.now(timezone.utc)
+    with SessionLocal() as s:
+        t = s.get(Task, tid)
+        if not t: return jsonify(success=False, message="Task not found"), 404
 
-    with SessionLocal() as session:
-        # fetch by id; optionally verify order_id if provided
-        t = session.get(Task, task_id)
-        if not t:
-            return jsonify(success=False, message="Task not found"), 404
-        if order_id and int(order_id) != (t.order_id or 0):
-            # optional: reject mismatched order_id; or just ignore
-            pass
-
+        qty  = t.quantity or 0
         prev = t.completed or 0
-        qty = t.quantity or 0
-        t.completed = max(0, min(new_completed, qty))  # clamp
+        t.completed = max(0, min(qty, new_completed))
+        delta = t.completed - prev
 
-        label = note or ("update" if t.completed != prev else "noop")
-        session.add(TaskHistory(
-            task_id=t.id,
-            timestamp=now,
-            delta=(t.completed - prev),
-            note=label,
-            completed=t.completed
+        s.add(TaskHistory(
+            task_id=tid, timestamp=utcnow(), note="update",
+            completed=t.completed, delta=delta
         ))
-        session.commit()
-
-        return jsonify(
-            success=True,
-            completed=t.completed,             # keeps main.js working
-            task={                              # lets stations.html update cleanly
-                "completed": t.completed,
-                "quantity": qty,
-                "delta": t.completed - prev,
-                "timestamp": now.isoformat().replace("+00:00", "Z")
-            }
-        )
+        s.commit()
+        return jsonify(success=True, completed=t.completed)
     
 def iso(dt):
     if not dt:
@@ -411,37 +400,48 @@ def iso(dt):
 
 @app.route("/task-history/<int:task_id>")
 def task_history(task_id):
-    def iso(dt):
-        if not dt:
-            return None
-        # If it's naive, treat as UTC
-        if isinstance(dt, str):
-            # already text, best effort pass-through
-            return dt
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat().replace("+00:00", "Z")
+    with SessionLocal() as s:
+        rows = (s.query(TaskHistory)
+                  .filter(TaskHistory.task_id == task_id)
+                  .order_by(TaskHistory.timestamp.desc())
+                  .all())
 
-    with SessionLocal() as session:
-        rows = (session.query(TaskHistory)
-                .filter(TaskHistory.task_id == task_id)
-                .order_by(TaskHistory.id.desc())  # stable, monotonic
-                .all())
+        def canon(note):
+            n = (note or "").strip().lower()
+            if n in ("變更", "", "update"): return "update"
+            if n in ("start", "開始", "開始計時"): return "start"
+            if n in ("stop", "停止", "停止計時"): return "stop"
+            if n in ("finish", "完成", "結束"):   return "finish"
+            if n in ("remove","unplan"):         return "remove"
+            if n in ("plan",):                   return "plan"
+            return n or "update"
 
+        # Precompute minutes for each STOP by scanning in chronological order
+        rows_asc = sorted(rows, key=lambda r: as_utc(r.timestamp) or datetime.min.replace(tzinfo=timezone.utc))
+        minutes_map = {}
+        last_start_ts = None
+        for h in rows_asc:
+            note = canon(getattr(h, "note", None))
+            ts = as_utc(getattr(h, "timestamp", None))
+            if note == "start":
+                last_start_ts = ts
+            elif note == "stop":
+                if last_start_ts and ts:
+                    minutes_map[h.id] = int((ts - last_start_ts).total_seconds() // 60)
+                last_start_ts = None
+
+        # Build response (still newest-first), formatting timestamps to local time
         out = []
         for h in rows:
             out.append({
-                "id": h.id,
-                "completed": h.completed,
+                "timestamp": ts_local(h.timestamp),           # use helpers you added
+                "note": canon(getattr(h, "note", None)),
                 "delta": getattr(h, "delta", None),
-                "note": h.note,
-                "timestamp": iso(h.timestamp),
-                "start_time": iso(h.start_time),
-                "stop_time": iso(h.stop_time),
-                "duration_minutes": h.duration_minutes
+                "minutes": minutes_map.get(h.id),             # computed if it's a STOP
+                "user": getattr(h, "user", None),
             })
         return jsonify(out)
-
+    
 @app.route("/delete_task", methods=["POST"])
 def delete_task():
     data = request.get_json()
@@ -530,46 +530,39 @@ def update_task_info():
 @app.route("/update_task_timer", methods=["POST"])
 def update_task_timer():
     data = request.get_json()
-    task_id = int(data["task_id"])
-    action = data["action"]
+    tid = int(data.get("task_id", 0))
+    action = (data.get("action") or "").lower()
 
-    now = datetime.now(timezone.utc)
-
-    with SessionLocal() as session:
-        t = session.get(Task, task_id)
+    with SessionLocal() as s:
+        t = s.get(Task, tid)
         if not t:
             return jsonify(success=False, message="Task not found"), 404
 
+        now = utcnow()
+
         if action == "start":
-            if t.start_time is None:
-                t.start_time = now
-                session.add(TaskHistory(
-                    task_id=task_id, timestamp=now, note="start", completed=t.completed
-                ))
-            # duplicate starts are ignored
+            t.start_time = now
+            t.stop_time = None
+            s.add(TaskHistory(task_id=tid, timestamp=now, note="start"))
+            s.commit()
+            return jsonify(success=True, running=True)
 
         elif action == "stop":
-            start_dt = as_utc(t.start_time)
-            if start_dt is None:
-                last_start = (session.query(TaskHistory)
-                              .filter(TaskHistory.task_id == task_id,
-                                      TaskHistory.note == "start")
-                              .order_by(TaskHistory.id.desc())
-                              .first())
-                start_dt = as_utc(last_start.timestamp) if last_start else None
+            t.stop_time = now
+            # just record a stop row; no minutes column on DB
+            s.add(TaskHistory(task_id=tid, timestamp=now, note="stop"))
+            # if you still want to show minutes to the UI, compute it here too:
+            mins = 0
+            if getattr(t, "start_time", None):
+                try:
+                    mins = int((as_utc(now) - as_utc(t.start_time)).total_seconds() // 60)
+                except Exception:
+                    mins = 0
+            s.commit()
+            return jsonify(success=True, running=False, minutes=mins)
 
-            dur_min = int((now - start_dt).total_seconds() // 60) if start_dt else None
-
-            session.add(TaskHistory(
-                task_id=task_id, timestamp=now, note="stop",
-                completed=t.completed, start_time=start_dt, stop_time=now,
-                duration_minutes=dur_min
-            ))
-            t.start_time = None
-
-        session.commit()
-
-    return jsonify(success=True)
+        else:
+            return jsonify(success=False, message="Invalid action"), 400
 
 with open("schema.sql", "r", encoding="utf-8") as f:
     schema = f.read()
@@ -916,25 +909,29 @@ def stations_plan_remove():
 def finish_task():
     data = request.get_json()
     tid = int(data.get("task_id", 0))
-    if not tid:
-        return jsonify(success=False, message="Missing task_id"), 400
 
     with SessionLocal() as s:
         t = s.get(Task, tid)
-        if not t:
-            return jsonify(success=False, message="Task not found"), 404
+        if not t: return jsonify(success=False, message="Task not found"), 404
 
-        # snap to 100%
-        t.completed = t.quantity or 0
+        prev = t.completed or 0
+        qty  = t.quantity or 0
+        t.completed = qty
 
-        # OPTIONAL: unschedule this task from all StationSchedule rows so it never reappears
+        s.add(TaskHistory(
+            task_id=tid, timestamp=utcnow(), note="finish",
+            completed=t.completed, delta=(t.completed - prev)
+        ))
+
+        # optional: unplan it everywhere
         try:
             s.query(StationSchedule).filter(StationSchedule.task_id == tid).delete()
         except Exception:
             pass
 
         s.commit()
-        return jsonify(success=True, completed=t.completed, quantity=t.quantity)
+        return jsonify(success=True, completed=t.completed, quantity=qty)
+
     
 TZ = timezone(timedelta(hours=8))
 
