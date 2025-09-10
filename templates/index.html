@@ -43,6 +43,47 @@
   .orders-page .modal textarea{ width:100%; height:32px; font-size:13px; padding:6px 10px; margin-bottom:6px; }
   .orders-page .modal textarea{ height:80px; }
   .orders-page .modal .footer{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+
+  /* Dialog chrome */
+  .orders-page .modal{
+    display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:1001; background:#fff; border:1px solid var(--border); border-radius:10px;
+    width:min(880px,96vw); max-height:88vh; box-shadow:0 18px 40px rgba(0,0,0,.35);
+  }
+  .orders-page .modal.open{ display:block; }
+
+  /* Backdrop */
+  .orders-page .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); backdrop-filter: blur(2px);
+    z-index:1000;
+  }
+  .orders-page .modal-overlay.open{ display:block; }
+
+  /* Header/Body/Footer */
+  .orders-page .modal .m-header{
+    padding:12px 16px; font-weight:700; border-bottom:1px solid var(--border);
+  }
+  .orders-page .modal .m-body{
+    padding:14px 16px; overflow:auto; max-height: calc(88vh - 56px - 56px); /* total - header - footer */
+  }
+  .orders-page .modal .m-footer{
+    padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end;
+    position:sticky; bottom:0; background:#fff;
+  }
+
+  /* Form grid */
+  .orders-page .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+  .orders-page .form-grid .full{ grid-column:1 / -1; }
+  .orders-page .form-grid input[type="text"],
+  .orders-page .form-grid input[type="date"],
+  .orders-page .form-grid select,
+  .orders-page .form-grid textarea{
+    width:100%; height:34px; padding:8px 10px; font-size:13px; border:1px solid #ddd; border-radius:6px;
+  }
+  .orders-page .form-grid textarea{ height:90px; resize:vertical; }
+
+  /* Keep page from scrolling behind the modal */
+  body.modal-open{ overflow:hidden; }
   </style>
   <script defer src="/static/main.js"></script>
 </head>
@@ -243,17 +284,17 @@
   </div>
 
   <!-- Mobile overlay -->
-  <div class="overlay" id="overlay"></div>
+  <div id="overlay-import" class="modal-overlay" onclick="closeModal('modal-import')"></div>
       <!-- Import Modal -->
-  <div id="modal-import" class="modal" onclick="if(event.target===this) closeModal('modal-import')">
-    <div class="panel">
-      <h3 style="margin:0">Import Orders (Excel .xlsx)</h3>
-      <button class="btn" onclick="closeModal('modal-order')">Close</button>
-      <input type="file" id="import-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="margin-top:10px">
-      <div style="margin-top:8px">
-        <input id="import-sheet" placeholder="工作表名稱 (例如: 生產中門框)" value="生產中門框" />
-      </div>
-      <div style="margin-top:12px"><button class="btn" onclick="submitImport()">Upload & Import</button></div>
+  <div id="modal-import" class="modal">
+    <h3>Import Orders (Excel .xlsx)</h3>
+    <div class="footer">
+      <button type="button" class="btn red" onclick="closeModal('modal-import')">Close</button>
+      <button type="button" class="btn" onclick="uploadImport()">Upload & Import</button>
+    </div>
+    <input type="file" id="import-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="margin-top:10px">
+    <div style="margin-top:8px">
+      <input id="import-sheet" placeholder="工作表名稱 (例如: 生產中門框)" value="生產中門框" />
     </div>
   </div>
   <div id="modal-bulk" class="modal" onclick="if(event.target===this) closeModal('modal-bulk')">
@@ -267,27 +308,40 @@
   </div>
 
 
-  <!-- Add Order Modal -->
-  <div id="modal-order" class="modal" onclick="if(event.target===this) closeModal('modal-order')">
-    <div class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h3 style="margin:0">Add Order</h3>
-        <button class="btn" onclick="closeModal('modal-order')">Close</button>
+  <!-- Backdrop -->
+  <div id="overlay-order" class="modal-overlay" onclick="closeModal('modal-order')"></div>
+
+  <!-- Modal -->
+  <div id="modal-order" class="modal" role="dialog" aria-modal="true" aria-labelledby="order-title">
+    <div class="m-header" id="order-title">Add Order</div>
+
+    <div class="m-body">
+      <div class="form-grid">
+        <input type="text" name="demand_date"   placeholder="客戶交期 YYYY/MM/DD" autofocus>
+        <input type="text" name="delivery"      placeholder="預計出貨 YYYY/MM/DD">
+        <input type="text" name="manufacture_code" placeholder="製令號碼">
+        <input type="text" name="project"       placeholder="專案名稱">
+        <input type="text" name="product"       placeholder="產品名稱">
+        <input type="number" name="quantity"    placeholder="數量" min="0" step="1">
+        <input type="text" name="datecreate"    placeholder="派單日 YYYY/MM/DD">
+        <input type="text" name="fengbian"      placeholder="封邊">
+        <input type="text" name="surface"       placeholder="面飾">
+
+        <div class="full">
+          <textarea name="note" placeholder="備註"></textarea>
+        </div>
+
+        <!-- 計劃流程 -->
+        <div class="full">
+          <div style="font-weight:600;margin:6px 0 4px">計劃流程（初始站）</div>
+          <button type="button" class="btn gray">+ 新增站</button>
+        </div>
       </div>
-      <div style="margin-top:10px"><input id="m-demand" placeholder="客戶交期 YYYY/MM/DD"></div>
-      <div style="margin-top:8px"><input id="m-delivery" placeholder="預計出貨 YYYY/MM/DD"></div>
-      <div style="margin-top:8px"><input id="m-code" placeholder="製令號碼"></div>
-      <div style="margin-top:8px"><input id="m-customer" placeholder="專案名稱"></div>
-      <div style="margin-top:8px"><input id="m-product" placeholder="產品名稱"></div>
-      <div style="margin-top:8px"><input id="m-qty" type="number" placeholder="數量"></div>
-      <div style="margin-top:8px"><input id="m-datecreate" placeholder="派單日 YYYY/MM/DD"></div>
-      <div style="margin-top:8px"><input id="m-fengbian" placeholder="封邊"></div>
-      <div style="margin-top:8px"><input id="m-wallpaper" placeholder="面飾"></div>
-      <div style="margin-top:8px"><input id="m-jobdesc" type="text" placeholder="備註"></div>
-      <div style="margin-top:8px"><b>計劃流程（初始站）</b></div>
-      <div class="station-planner" id="station-planner"></div>
-      <button class="btn gray" onclick="addPlannedStation()">+ 新增站</button>
-      <div style="margin-top:12px"><button class="btn" onclick="submitOrder()">Save</button></div>
+    </div>
+
+    <div class="m-footer">
+      <button type="button" class="btn gray" onclick="closeModal('modal-order')">Close</button>
+      <button type="button" class="btn" onclick="saveOrder()">Save</button>
     </div>
   </div>
 

@@ -92,3 +92,147 @@ tr.is-running{outline:2px solid var(--warning);outline-offset:-2px}
   .print-label{display:block}
   @page{margin:10mm}
 }
+/* Make the whole modal box-size sane */
+.orders-page .modal, .orders-page .modal * { box-sizing: border-box; }
+
+/* Body scroll only vertical; no sideways scroll */
+.orders-page .m-body{
+  max-height: calc(88vh - 56px - 56px); /* total - header - footer */
+  overflow-y: auto;
+  overflow-x: hidden;     /* <- fixes the inner horizontal bar */
+  padding-right: 6px;     /* space for vertical scrollbar */
+}
+
+/* 2-col grid on desktop, 1-col on mobile */
+.orders-page .form-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:10px 12px; }
+.orders-page .form-grid .full{ grid-column: 1 / -1; }
+
+@media (max-width: 900px){
+  .orders-page .form-grid{ grid-template-columns: 1fr; }
+}
+
+/* Consistent control look (shared with Stations too if you like) */
+input[type="text"], input[type="number"], input[type="date"], select, textarea{
+  background:#fff; border:1px solid #ced4da; border-radius:6px;
+  padding:8px 10px; height:34px; font-size:13px;
+}
+textarea{ height:96px; resize:vertical; }
+input:focus, select:focus, textarea:focus{
+  outline:0; border-color:var(--primary); box-shadow:0 0 0 2px rgba(0,123,255,.15);
+}
+
+/* --- Sidebar overflow fix --- */
+.sidebar, .sidebar * { box-sizing: border-box; }   /* key line */
+.sidebar { overflow-x: hidden; }                    /* no horizontal bar */
+
+/* Make sidebar controls fill without spilling */
+.sidebar .sbm input[type="text"],
+.sidebar .sbm input[type="date"],
+.sidebar .sbm select,
+.sidebar .sbm textarea,
+.sidebar .sbm .btn {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Date row: two fields side-by-side without overflow */
+.sidebar .sbm .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+@media (max-width: 360px){
+  .sidebar .sbm .row { grid-template-columns: 1fr; }  /* stack on tiny screens */
+}
+
+/* Optional: tidy the search card */
+.sidebar .card { background:#fff; border:1px solid var(--border); border-radius:8px; padding:10px; }
+.sidebar .card + .card { margin-top:10px; }
+
+/* ---- Stations table polish ---- */
+.stations-page .table-wrap{ overflow:auto; border-radius:6px; background:#fff; }
+.stations-page table{ width:max-content; min-width:100%; border-collapse:collapse; }
+
+.stations-page thead th{
+  position:sticky; top:0; z-index:5;
+  background:var(--primary); color:#fff; border-color:var(--primary-dark);
+}
+
+.stations-page thead th.actions-col{
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary-dark) !important;
+}
+
+.stations-page th.actions-col,
+.stations-page td.actions-col{
+  position:sticky; right:0; z-index:4; /* keep frozen col readable over scroll */
+  box-shadow: none;   /* small divider to the left */
+}
+
+/* tighter rows without looking cramped */
+.stations-page th, .stations-page td{ padding:8px 10px; }
+.stations-page tbody tr:nth-child(even) td{ background:#f8fafc; }
+
+/* long text should wrap, not force horizontal scroll */
+.stations-page .wrap{ white-space:normal; word-break:break-word; }
+
+/* notes box smaller by default */
+.stations-page .cell-notes textarea{ 
+  width: 100%;
+  min-height: 56px;
+  box-sizing: border-box;
+  overflow-x: hidden;     /* <- kills that tiny horizontal bar */
+  overflow-y: auto;
+  resize: vertical;
+}
+
+/* compact buttons */
+.stations-page .btn.sm{ padding:6px 8px; font-size:12px; }
+
+/* Effective due: keep to one line, put source under it in small text */
+.stations-page .due-main{ font-weight:600; }
+.stations-page .due-sub{ display:block; font-size:12px; color:#6c757d; line-height:1.2; }
+
+/* numbers centered */
+.stations-page .num{ text-align:center; }
+
+/* prevent any sidebar/input from creating horizontal scroll */
+.sidebar, .sidebar *{ box-sizing:border-box; }
+.sidebar{ overflow-x:hidden; }
+
+.print-only { display: none !important; }
+@media print {
+  .print-only  { display: table-cell !important; }
+  .print-label { display: block !important; }
+  .screen-only { display: none !important; }
+}
+/* 1) NOTES column (10th) — stop the “offside” and inner X-scroll */
+.stations-page thead th:nth-child(10),
+.stations-page tbody td:nth-child(10){
+  width: 280px;          /* tweak: 240–320px to taste */
+  max-width: 280px;
+}
+
+.stations-page tbody td:nth-child(10){ padding-right: 8px; }
+
+.stations-page tbody td:nth-child(10) textarea{
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0;
+  min-height: 56px;
+  overflow-x: hidden;     /* kill the tiny horizontal bar */
+  overflow-y: auto;
+  resize: vertical;
+}
+
+/* 2) Keep the Actions header blue like the others */
+.stations-page thead th.actions-col{
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary-dark) !important;
+}
+
+/* 3) (Safety) make sure table cells use border-box so widths don't spill */
+.stations-page table,
+.stations-page th,
+.stations-page td{ box-sizing: border-box; }
