@@ -333,3 +333,105 @@ body.modal-open{ overflow:hidden; } /* prevent background scroll when a modal is
   /* make inputs look like plain text on paper */
   input, select, textarea { background: transparent !important; border: 0 !important; box-shadow: none !important; outline: 0 !important; }
 }
+/* ====================== Stations – PRINT SHEET ====================== */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+
+  /* hide screen UI on paper */
+  .stations-page .toolbar,
+  .stations-page .sidebar,
+  .stations-page .hamburger,
+  .stations-page .actions-group,
+  .stations-page .task-status { display: none !important; }
+
+  /* print vs screen toggles */
+  .stations-page .print-only  { display: table-cell !important; }
+  .stations-page .screen-only { display: none !important; }
+
+  /* ---------- Print header band ---------- */
+  .stations-page .sp-print-header { margin: 0 0 6px 0; }
+  .stations-page .sp-ph{
+    width:100%; border-collapse:collapse; table-layout:fixed; font-size:13px;
+  }
+  .stations-page .sp-ph td{
+    border:1.8pt solid #000; padding:6px 8px;
+  }
+  .stations-page .sp-ph .lab{ width:90px; font-weight:700; }
+  .stations-page .sp-ph .lab.mid{ width:100px; text-align:right; }
+  .stations-page .sp-ph .val{ background:#fff; }
+  .stations-page .sp-ph .blankline{ letter-spacing:2px; }
+
+  /* ---------- Main table ---------- */
+  .stations-page table{
+    width:100% !important;
+    border-collapse:collapse !important;
+    table-layout:fixed !important;
+    font-size:12.2pt;               /* larger, like your sample */
+  }
+  .stations-page th, .stations-page td{
+    border:1.8pt solid #000;        /* thick grid */
+    padding:6px 6px;
+    color:#000;
+  }
+
+  /* THEAD bands */
+  .stations-page thead th{ background:#fff; color:#000; }
+  /* Black band: 製令號碼 / 專案名稱 / 產品名稱 */
+  .stations-page thead th:nth-child(5),
+  .stations-page thead th:nth-child(6),
+  .stations-page thead th:nth-child(7){
+    background:#000 !important; color:#fff !important; font-weight:700;
+  }
+  /* Green band: 計劃數量 + the three result columns */
+  .stations-page thead th:nth-child(12),
+  .stations-page thead th.print-only{
+    background:#8BC34A !important; color:#000 !important; font-weight:700;
+  }
+  /* bilingual sublabels smaller */
+  .stations-page .print-label{ display:block !important; font-size:9.5pt; line-height:1.15; }
+
+  /* HIDE columns we don't want on paper */
+  .stations-page thead th:nth-child(1),  .stations-page tbody td:nth-child(1),   /* Progress */
+  .stations-page thead th:nth-child(4),  .stations-page tbody td:nth-child(4),   /* Effective due */
+  .stations-page thead th:nth-child(11), .stations-page tbody td:nth-child(11),  /* 已完成 */
+  .stations-page thead th:nth-child(13), .stations-page tbody td:nth-child(13),  /* 最後更新 */
+  .stations-page thead th.actions-col,   .stations-page tbody td.actions-col {    /* Actions */
+    display:none !important;
+  }
+  /* If the backlog checkbox column exists, it will still print; remove if you want it hidden too: */
+  /* .stations-page thead th:nth-child(15), .stations-page tbody td:nth-child(15){ display:none !important; } */
+
+  /* Notes prints plain text (textarea hidden) */
+  .stations-page tbody td:nth-child(10) textarea{ display:none !important; }
+  .stations-page tbody td:nth-child(10) .print-note{ display:block !important; white-space:pre-wrap; }
+
+  /* Numbers centered */
+  .stations-page tbody td:nth-child(8),
+  .stations-page tbody td:nth-child(12),
+  .stations-page tbody td.print-only{ text-align:center; }
+
+  /* Column widths (tweak if needed) */
+  .stations-page thead th:nth-child(2),  .stations-page tbody td:nth-child(2)  { width:22mm; } /* 客戶交期 */
+  .stations-page thead th:nth-child(3),  .stations-page tbody td:nth-child(3)  { width:22mm; } /* 預計出貨 */
+  .stations-page thead th:nth-child(5),  .stations-page tbody td:nth-child(5)  { width:28mm; } /* 製令號碼 */
+  .stations-page thead th:nth-child(6),  .stations-page tbody td:nth-child(6)  { width:55mm; } /* 專案名稱 */
+  .stations-page thead th:nth-child(7),  .stations-page tbody td:nth-child(7)  { width:24mm; } /* 產品名稱 */
+  .stations-page thead th:nth-child(8),  .stations-page tbody td:nth-child(8)  { width:20mm; } /* 製令數量 */
+  .stations-page thead th:nth-child(9),  .stations-page tbody td:nth-child(9)  { width:28mm; } /* 作業內容 */
+  .stations-page thead th:nth-child(10){ width:58mm; }                           /* 注意事項 */
+  .stations-page thead th:nth-child(12), .stations-page tbody td:nth-child(12){ width:18mm; } /* 計劃數量 */
+  .stations-page thead th.print-only, .stations-page tbody td.print-only{ width:22mm; }       /* 3 result cols */
+
+  /* Grey fill for 計劃數量 like your sheet */
+  .stations-page tbody td:nth-child(12){ background:#dfe3e6; }
+
+  /* Make "剩下" print as 計劃數量 (label-only trick) */
+  .stations-page thead th:nth-child(12) .print-label::before{
+    content:"計劃數量"; display:block; font-weight:700;
+  }
+
+  /* Inputs look like text on paper */
+  .stations-page input, .stations-page select, .stations-page textarea{
+    background:transparent !important; border:0 !important; box-shadow:none !important; outline:0 !important;
+  }
+}

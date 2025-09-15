@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Station Progress</title>
   <link rel="stylesheet" href="/static/common.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='stations-print.css') }}" media="print">
   <script>
     function updateTask(taskId, orderId) {
       const inputEl = document.getElementById(`task-completed-${taskId}-${orderId}`);
@@ -271,25 +272,26 @@
         </div>
       </div>
       
-      <div class="print-only print-header">
-        <table class="ph">
+      <!-- PRINT HEADER (shows on paper only) -->
+      <div class="print-only sp-print-header">
+        <table class="sp-ph">
           <tr>
             <td class="lab">生產排程：</td>
             <td class="val">{{ request.args.get('group','') or '________' }}</td>
-            <td class="lab r">排程日：</td>
+            <td class="lab mid">排程日：</td>
             <td class="val">{{ request.args.get('date','') or today_date }}</td>
-            <td class="lab r">人員 Pekerja：</td>
-            <td class="val">________________</td>
+            <td class="lab mid">人員 Pekerja：</td>
+            <td class="val blankline">________________</td>
           </tr>
         </table>
       </div>
       <table>
         <thead>
           <tr>
-            <th>Effective due</th>
             <th onclick="sortStationTable(0)">Progress ↑↓</th>
             <th onclick="sortStationTable(1)">客戶交期 ↑↓<span class="print-label"><br>Tanggal Ekspektasi Pengiriman oleh Tamu</span></th>
             <th onclick="sortStationTable(2)">預計出貨 ↑↓<span class="print-label"><br>Tanggal Barang Dapat Dikirim</span></th>
+            <th>Effective due</th>
             <th onclick="sortStationTable(3)">製令號碼 ↑↓<span class="print-label"><br>Nomor Pesanan</span></th>
             <th onclick="sortStationTable(4)">專案名稱 ↑↓<span class="print-label"><br>Nama Proyek</span></th>
             <th onclick="sortStationTable(5)">產品名稱 ↑↓<span class="print-label"><br>Nama Produk</span></th>
