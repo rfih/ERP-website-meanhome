@@ -435,3 +435,83 @@ body.modal-open{ overflow:hidden; } /* prevent background scroll when a modal is
     background:transparent !important; border:0 !important; box-shadow:none !important; outline:0 !important;
   }
 }
+/* ===== Stations – Clean print table (scoped) ===== */
+@media print {
+  /* Hide the screen table on paper; show the print table */
+  .stations-page .screen-table { display: none !important; }
+  .stations-page .print-table { display: table !important; width: 100% !important; }
+
+  /* Ensure the header block shows (not as table-cell) */
+  .stations-page .sp-print-header { display: block !important; }
+
+  /* Page layout safety to avoid blank extra page */
+  .stations-page .layout { display: block !important; overflow: visible !important; }
+  .stations-page .content { width: 100% !important; overflow: visible !important; }
+  html, body { height: auto !important; }
+
+  /* Table look like your sample */
+  .stations-page .print-table {
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    font-size: 12.2pt;
+  }
+  .stations-page .print-table th,
+  .stations-page .print-table td {
+    border: 1.8pt solid #000;
+    padding: 6px 6px;
+    color: #000;
+  }
+
+  /* Head bands: black for columns 3–5 (製令號碼/專案名稱/產品名稱), green for last 4 */
+  .stations-page .print-table thead th:nth-child(3),
+  .stations-page .print-table thead th:nth-child(4),
+  .stations-page .print-table thead th:nth-child(5) {
+    background: #000 !important; color: #fff !important; font-weight: 700;
+  }
+  .stations-page .print-table thead th:nth-child(9),
+  .stations-page .print-table thead th:nth-child(10),
+  .stations-page .print-table thead th:nth-child(11),
+  .stations-page .print-table thead th:nth-child(12) {
+    background: #8BC34A !important; color: #000 !important; font-weight: 700;
+  }
+
+  .stations-page .print-label { display:block; font-size:9.5pt; line-height:1.15; }
+
+  /* Column widths for a nice fit (tweak if needed) */
+  .stations-page .print-table thead th:nth-child(1),
+  .stations-page .print-table tbody td:nth-child(1) { width: 22mm; }  /* 客戶交期 */
+  .stations-page .print-table thead th:nth-child(2),
+  .stations-page .print-table tbody td:nth-child(2) { width: 22mm; }  /* 預計出貨 */
+  .stations-page .print-table thead th:nth-child(3),
+  .stations-page .print-table tbody td:nth-child(3) { width: 28mm; }  /* 製令號碼 */
+  .stations-page .print-table thead th:nth-child(4),
+  .stations-page .print-table tbody td:nth-child(4) { width: 55mm; }  /* 專案名稱 */
+  .stations-page .print-table thead th:nth-child(5),
+  .stations-page .print-table tbody td:nth-child(5) { width: 24mm; }  /* 產品名稱 */
+  .stations-page .print-table thead th:nth-child(6),
+  .stations-page .print-table tbody td:nth-child(6) { width: 20mm; text-align:center; } /* 製令數量 */
+  .stations-page .print-table thead th:nth-child(7),
+  .stations-page .print-table tbody td:nth-child(7) { width: 28mm; }  /* 作業內容 */
+  .stations-page .print-table thead th:nth-child(8),
+  .stations-page .print-table tbody td:nth-child(8) { width: 58mm; }  /* 注意事項 */
+  .stations-page .print-table thead th:nth-child(9),
+  .stations-page .print-table tbody td:nth-child(9) { width: 18mm; text-align:center; } /* 計劃數量 */
+  .stations-page .print-table thead th:nth-child(10),
+  .stations-page .print-table thead th:nth-child(11),
+  .stations-page .print-table thead th:nth-child(12),
+  .stations-page .print-table tbody td:nth-child(10),
+  .stations-page .print-table tbody td:nth-child(11),
+  .stations-page .print-table tbody td:nth-child(12) { width: 22mm; text-align:center; }
+
+  /* Grey fill for 計劃數量 like your sheet */
+  .stations-page .print-table tbody td:nth-child(9){ background:#dfe3e6; }
+
+  /* Notes cell wrap */
+  .stations-page .print-table .pt-notes { white-space: pre-wrap; }
+
+  /* Avoid page breaks inside rows */
+  .stations-page .print-table { page-break-inside:auto; }
+  .stations-page .print-table tr, 
+  .stations-page .print-table td, 
+  .stations-page .print-table th { page-break-inside: avoid; }
+}

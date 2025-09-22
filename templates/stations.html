@@ -285,6 +285,43 @@
           </tr>
         </table>
       </div>
+      <table class="print-table print-only">
+        <thead>
+          <tr>
+            <th>客戶交期<br><span class="print-label">Tanggal Ekspektasi Pengiriman oleh Tamu</span></th>
+            <th>預計出貨<br><span class="print-label">Tanggal Barang Dapat Dikirim</span></th>
+            <th>製令號碼<br><span class="print-label">Nomor Pesanan</span></th>
+            <th>專案名稱<br><span class="print-label">Nama Proyek</span></th>
+            <th>產品名稱<br><span class="print-label">Nama Produk</span></th>
+            <th>製令數量<br><span class="print-label">Jumlah Pesanan</span></th>
+            <th>作業內容<br><span class="print-label">Isi Pekerjaan</span></th>
+            <th>注意事項<br><span class="print-label">Hal yang Perlu Diperhatikan</span></th>
+            <th>計劃數量<br><span class="print-label">Jumlah Proyek</span></th>
+            <th>良品數量<br><span class="print-label">Jumlah Produk Lolos</span></th>
+            <th>不良品數量<br><span class="print-label">Jumlah Produk Tidak Lolos</span></th>
+            <th>生產總時間(分)<br><span class="print-label">Total Waktu Produksi (dalam menit)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in tasks %}
+            {% set rem = (item.task.quantity or 0) - (item.task.completed or 0) %}
+            <tr>
+              <td>{{ item.order.demand_date|fmtdate or '—' }}</td>
+              <td>{{ item.order.delivery|fmtdate or '—' }}</td>
+              <td>{{ item.order.manufacture_code }}</td>
+              <td>{{ item.order.customer }}</td>
+              <td>{{ item.order.product }}</td>
+              <td style="text-align:center">{{ item.task.quantity or 0 }}</td>
+              <td>{{ item.task.task }}</td>
+              <td class="pt-notes">{{ item.task.note or '' }}</td>
+              <td style="text-align:center">{{ rem if rem > 0 else 0 }}</td>
+              <td class="pt-center"></td>
+              <td class="pt-center"></td>
+              <td class="pt-center"></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
       <table class="screen-table">
         <thead>
           <tr>
